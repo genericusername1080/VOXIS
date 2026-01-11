@@ -1,11 +1,13 @@
 #!/bin/bash
 # ================================================================
-# VOXIS - Run Local
+# VOXIS - Run Local (Reliability Enhanced v2.0)
 # Powered by Trinity | Built by Glass Stone 2026 -R/D 
 # Gabriel Rodriguez CEO Glass Stone
 # ================================================================
-# This script starts both the backend and frontend servers locally.
-# Usage: ./run-local.sh
+# Features:
+# - Process watchdog with auto-restart
+# - Health monitoring
+# - Graceful shutdown handling
 # ================================================================
 
 set -e
@@ -20,13 +22,25 @@ NC='\033[0m' # No Color
 echo ""
 echo -e "${BLUE}================================================================${NC}"
 echo -e "${BLUE}  VOXIS Audio Restoration System${NC}"
-echo -e "${BLUE}  Powered by Trinity | Built by Glass Stone 2026 -R/D V1A${NC}"
+echo -e "${BLUE}  Powered by Trinity | Built by Glass Stone 2026 -R/D V2.0${NC}"
 echo -e "${BLUE}================================================================${NC}"
 echo ""
 
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
+
+# Configuration
+MAX_RESTART_ATTEMPTS=5
+HEALTH_CHECK_INTERVAL=30
+BACKEND_PORT=5001
+FRONTEND_PORT=5173
+
+# Process tracking
+BACKEND_PID=0
+FRONTEND_PID=0
+BACKEND_RESTARTS=0
+RUNNING=true
 
 # Check for Node.js
 if ! command -v node &> /dev/null; then
@@ -39,6 +53,23 @@ fi
 if ! command -v python3 &> /dev/null; then
     echo -e "${RED}Error: Python 3 is not installed${NC}"
     exit 1
+fi
+
+# Check for FFmpeg (required for audio format conversion)
+if ! command -v ffmpeg &> /dev/null; then
+    echo -e "${YELLOW}Installing FFmpeg (required for audio export)...${NC}"
+    if command -v brew &> /dev/null; then
+        brew install ffmpeg
+    elif command -v apt-get &> /dev/null; then
+        sudo apt-get update && sudo apt-get install -y ffmpeg
+    elif command -v dnf &> /dev/null; then
+        sudo dnf install -y ffmpeg
+    else
+        echo -e "${RED}Error: FFmpeg is not installed and no package manager found${NC}"
+        echo "Please install FFmpeg manually: https://ffmpeg.org/download.html"
+        exit 1
+    fi
+    echo -e "${GREEN}FFmpeg installed successfully${NC}"
 fi
 
 # Install frontend dependencies if needed
@@ -54,7 +85,7 @@ if [ ! -f "backend/venv/bin/activate" ]; then
     python3 -m venv venv
     source venv/bin/activate
     pip install --upgrade pip
-    pip install flask flask-cors python-dotenv numpy scipy soundfile librosa noisereduce
+    pip install flask flask-cors python-dotenv numpy scipy soundfile librosa noisereduce pydub gunicorn
     cd ..
 else
     source backend/venv/bin/activate 2>/dev/null || true
@@ -63,47 +94,138 @@ fi
 # Create uploads/outputs directories
 mkdir -p backend/uploads backend/outputs
 
-echo ""
-echo -e "${GREEN}Starting servers...${NC}"
-echo ""
+# ================================================================
+# PROCESS MANAGEMENT
+# ================================================================
 
-# Function to cleanup on exit
+start_backend() {
+    echo -e "${BLUE}[BACKEND] Starting Gunicorn on port ${BACKEND_PORT}...${NC}"
+    cd backend
+    gunicorn --config gunicorn.conf.py server:app &
+    BACKEND_PID=$!
+    cd ..
+    echo -e "${GREEN}[BACKEND] Started with PID: ${BACKEND_PID}${NC}"
+}
+
+start_frontend() {
+    echo -e "${BLUE}[FRONTEND] Starting Vite on port ${FRONTEND_PORT}...${NC}"
+    npm run dev &
+    FRONTEND_PID=$!
+    echo -e "${GREEN}[FRONTEND] Started with PID: ${FRONTEND_PID}${NC}"
+}
+
+check_backend_health() {
+    curl -sf "http://localhost:${BACKEND_PORT}/api/health" > /dev/null 2>&1
+    return $?
+}
+
+restart_backend() {
+    if [ $BACKEND_RESTARTS -ge $MAX_RESTART_ATTEMPTS ]; then
+        echo -e "${RED}[WATCHDOG] Max restart attempts reached. Manual intervention required.${NC}"
+        return 1
+    fi
+    
+    echo -e "${YELLOW}[WATCHDOG] Backend not responding. Restarting... (Attempt $((BACKEND_RESTARTS + 1))/${MAX_RESTART_ATTEMPTS})${NC}"
+    
+    # Kill existing process if any
+    kill $BACKEND_PID 2>/dev/null || true
+    sleep 2
+    
+    # Start fresh
+    start_backend
+    BACKEND_RESTARTS=$((BACKEND_RESTARTS + 1))
+    
+    # Wait for startup
+    sleep 3
+    
+    if check_backend_health; then
+        echo -e "${GREEN}[WATCHDOG] Backend recovered successfully${NC}"
+        BACKEND_RESTARTS=0  # Reset on successful recovery
+        return 0
+    fi
+    
+    return 1
+}
+
+watchdog() {
+    while $RUNNING; do
+        sleep $HEALTH_CHECK_INTERVAL
+        
+        # Check if we should still be running
+        if ! $RUNNING; then
+            break
+        fi
+        
+        # Health check
+        if ! check_backend_health; then
+            restart_backend || true
+        fi
+    done
+}
+
 cleanup() {
     echo ""
-    echo -e "${YELLOW}Shutting down...${NC}"
-    kill $BACKEND_PID 2>/dev/null
-    kill $FRONTEND_PID 2>/dev/null
+    echo -e "${YELLOW}[SHUTDOWN] Gracefully shutting down...${NC}"
+    RUNNING=false
+    
+    # Give processes time to finish current work
+    sleep 1
+    
+    # Kill processes
+    if [ $BACKEND_PID -ne 0 ]; then
+        echo -e "${YELLOW}[SHUTDOWN] Stopping backend (PID: ${BACKEND_PID})...${NC}"
+        kill $BACKEND_PID 2>/dev/null || true
+    fi
+    
+    if [ $FRONTEND_PID -ne 0 ]; then
+        echo -e "${YELLOW}[SHUTDOWN] Stopping frontend (PID: ${FRONTEND_PID})...${NC}"
+        kill $FRONTEND_PID 2>/dev/null || true
+    fi
+    
+    echo -e "${GREEN}[SHUTDOWN] Complete${NC}"
     exit 0
 }
 
 trap cleanup SIGINT SIGTERM
 
-# Start backend server
-echo -e "${BLUE}[1/2] Starting Backend (Flask) on port 5001...${NC}"
-cd backend
-python3 server.py &
-BACKEND_PID=$!
-cd ..
+# ================================================================
+# MAIN STARTUP
+# ================================================================
 
-# Wait for backend to start
-sleep 2
+echo ""
+echo -e "${GREEN}Starting servers...${NC}"
+echo ""
 
-# Start frontend server
-echo -e "${BLUE}[2/2] Starting Frontend (Vite) on port 5173...${NC}"
-npm run dev &
-FRONTEND_PID=$!
-
-# Wait for frontend to start
+# Start backend
+start_backend
 sleep 3
 
+# Verify backend started
+if ! check_backend_health; then
+    echo -e "${RED}[ERROR] Backend failed to start${NC}"
+    exit 1
+fi
+
+# Start frontend
+start_frontend
+sleep 3
+
+# Start watchdog in background
+watchdog &
+WATCHDOG_PID=$!
+
 echo ""
 echo -e "${GREEN}================================================================${NC}"
-echo -e "${GREEN}  VOXIS is running!${NC}"
+echo -e "${GREEN}  VOXIS is running with reliability enhancements!${NC}"
 echo -e "${GREEN}================================================================${NC}"
 echo ""
-echo -e "  Frontend:  ${BLUE}http://localhost:5173${NC}"
-echo -e "  Backend:   ${BLUE}http://localhost:5001${NC}"
-echo -e "  Health:    ${BLUE}http://localhost:5001/api/health${NC}"
+echo -e "  Frontend:  ${BLUE}http://localhost:${FRONTEND_PORT}${NC}"
+echo -e "  Backend:   ${BLUE}http://localhost:${BACKEND_PORT}${NC}"
+echo -e "  Health:    ${BLUE}http://localhost:${BACKEND_PORT}/api/health${NC}"
+echo ""
+echo -e "  ${GREEN}✓ Watchdog: Auto-restart on failure${NC}"
+echo -e "  ${GREEN}✓ Health monitoring every ${HEALTH_CHECK_INTERVAL}s${NC}"
+echo -e "  ${GREEN}✓ Max restart attempts: ${MAX_RESTART_ATTEMPTS}${NC}"
 echo ""
 echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop all servers"
 echo ""

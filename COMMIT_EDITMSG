@@ -1,0 +1,12 @@
+feat: Complete VOXIS v2.0 - Swiss Design Audio Restoration System
+
+- Implemented Swiss Design UI with modular components
+- Added Python Flask backend with audio processing pipeline
+- Integrated DeepFilterNet for AI denoising
+- Integrated AudioSR for upscaling
+- Added multi-format export (WAV, FLAC, MP3)
+- Added Docker deployment configurations
+- Added run-local.sh for easy local development
+- Refactored frontend into 8 reusable components
+
+Powered by Trinity | Built by Glass Stone

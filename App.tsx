@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { PipelineStep, AudioMetadata, ProcessingConfig } from './types';
 import { apiService, JobStatus } from './services/apiService';
+import { useNetworkStatus, useOperationQueue } from './services/networkResilience';
 
 // Components
 import { SwissHeader } from './components/SwissHeader';
@@ -11,6 +12,8 @@ import { ProcessingStatus } from './components/ProcessingStatus';
 import { CompletionPanel } from './components/CompletionPanel';
 import { SwissPlayer } from './components/SwissPlayer';
 import { SwissFooter } from './components/SwissFooter';
+import { OfflineBanner } from './components/OfflineBanner';
+import { StartPanel } from './components/StartPanel';
 
 const PIPELINE_STEPS = [
   { id: PipelineStep.UPLOAD, label: '01', name: 'UPLOAD' },
@@ -22,14 +25,18 @@ const PIPELINE_STEPS = [
 ];
 
 const App: React.FC = () => {
+  // Network Resilience
+  const networkStatus = useNetworkStatus('http://localhost:5001/api/health', 5000);
+  const { queueLength } = useOperationQueue();
+  
   // State
   const [step, setStep] = useState<PipelineStep>(PipelineStep.IDLE);
   const [metadata, setMetadata] = useState<AudioMetadata | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [stagedFile, setStagedFile] = useState<File | null>(null);
   const [logs, setLogs] = useState<string[]>(['SYS.INIT', 'TRINITY.READY']);
   
   // Config
@@ -39,6 +46,7 @@ const App: React.FC = () => {
     upscaleFactor: 2,
     targetSampleRate: 48000,
     targetChannels: 2,
+    noiseProfile: 'auto',
   });
 
   // Audio
@@ -53,12 +61,18 @@ const App: React.FC = () => {
     setLogs(prev => [...prev.slice(-6), msg]);
   }, []);
 
-  // Effects
+  // Sync backend status with network status
+  const backendStatus = networkStatus.isBackendReachable ? 'online' : 
+                        networkStatus.isOnline ? 'checking' : 'offline';
+
+  // Effects - Log network changes
   useEffect(() => {
-    apiService.healthCheck()
-      .then(() => { setBackendStatus('online'); addLog('BACKEND.OK'); })
-      .catch(() => { setBackendStatus('offline'); addLog('BACKEND.ERR'); });
-  }, [addLog]);
+    if (networkStatus.isBackendReachable) {
+      addLog('BACKEND.OK');
+    } else if (!networkStatus.isOnline) {
+      addLog('NETWORK.OFFLINE');
+    }
+  }, [networkStatus.isBackendReachable, networkStatus.isOnline, addLog]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -83,21 +97,32 @@ const App: React.FC = () => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file?.type.startsWith('audio/')) processFile(file);
+    if (file?.type.startsWith('audio/')) stageFile(file);
   };
 
-  const processFile = async (file: File) => {
+  // Stage file for review before processing
+  const stageFile = (file: File) => {
+    setStagedFile(file);
+    setStep(PipelineStep.STAGED);
+    setAudioUrl(URL.createObjectURL(file));
+    setMetadata({ name: file.name, size: file.size, duration: 0, sampleRate: 0, channels: 0 });
+    addLog(`STAGED: ${file.name.slice(0, 16).toUpperCase()}`);
+  };
+
+  // Start processing after user confirms
+  const startProcessing = async () => {
+    if (!stagedFile) return;
     if (backendStatus !== 'online') {
       setError('BACKEND OFFLINE');
       return;
     }
+    
+    const file = stagedFile;
     setError(null);
     setStep(PipelineStep.UPLOAD);
     setProgress(0);
     setDownloadUrl(null);
-    setAudioUrl(URL.createObjectURL(file));
-    setMetadata({ name: file.name, size: file.size, duration: 0, sampleRate: 0, channels: 0 });
-    addLog(`FILE: ${file.name.slice(0, 20).toUpperCase()}`);
+    addLog('PROCESSING.START');
 
     try {
       const upload = await apiService.uploadFile(file, setProgress);
@@ -164,6 +189,15 @@ const App: React.FC = () => {
     <div className="swiss-app">
       {audioUrl && <audio ref={audioRef} src={audioUrl} />}
       
+      {/* Offline Banner - Shows when network/backend is unavailable */}
+      <OfflineBanner 
+        isOnline={networkStatus.isOnline}
+        isBackendReachable={networkStatus.isBackendReachable}
+        reconnectAttempts={networkStatus.reconnectAttempts}
+        onRetry={networkStatus.forceReconnect}
+        queueLength={queueLength}
+      />
+      
       <div className="swiss-grid">
         <SwissHeader status={backendStatus} />
         
@@ -181,11 +215,20 @@ const App: React.FC = () => {
 
           {step === PipelineStep.IDLE && (
             <FileDropZone 
-              onFileSelect={processFile}
+              onFileSelect={stageFile}
               isDragging={isDragging}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
+            />
+          )}
+
+          {step === PipelineStep.STAGED && (
+            <StartPanel
+              metadata={metadata}
+              config={config}
+              onStart={startProcessing}
+              onCancel={reset}
             />
           )}
 
@@ -229,10 +272,39 @@ const App: React.FC = () => {
           display: grid;
           grid-template-columns: 280px 1fr;
           grid-template-rows: auto 1fr auto;
-          min-height: 100vh; border: 4px solid #000;
+          min-height: 100vh;
+          border: 4px solid #000;
+          transition: all 0.3s ease;
         }
+
+        /* Mobile Responsive Breakpoint */
+        @media (max-width: 768px) {
+          .swiss-grid {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto auto 1fr auto;
+            border-width: 0;
+          }
+          
+          .swiss-app {
+            overflow-x: hidden;
+          }
+          
+          .drop-zone, .processing-zone, .complete-zone {
+            margin: 12px;
+            padding: 24px;
+          }
+          
+          .swiss-footer {
+            flex-direction: column;
+            gap: 12px;
+            text-align: center;
+          }
+        }
+
         .swiss-main {
           display: flex; flex-direction: column; background: #f5f5f5;
+          position: relative;
+          z-index: 1;
         }
         .error-banner {
           background: #ff3300; color: #fff; padding: 12px 24px;

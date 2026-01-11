@@ -30,6 +30,7 @@ export const PipelineDisplay: React.FC<PipelineDisplayProps> = ({ currentStep, s
           display: flex;
           border-bottom: 4px solid #000;
           background: #fff;
+          overflow-x: auto;
         }
         .pipeline-step {
           flex: 1;
@@ -38,6 +39,7 @@ export const PipelineDisplay: React.FC<PipelineDisplayProps> = ({ currentStep, s
           border-right: 3px solid #000;
           font-family: 'JetBrains Mono', monospace;
           transition: all 0.2s;
+          min-width: 60px;
         }
         .pipeline-step:last-child { border-right: none; }
         .pipeline-step.active { background: #ff3300; color: #fff; }
@@ -45,6 +47,12 @@ export const PipelineDisplay: React.FC<PipelineDisplayProps> = ({ currentStep, s
         .pipeline-step.inactive { color: #ccc; }
         .step-number { font-size: 24px; font-weight: 900; }
         .step-name { font-size: 10px; letter-spacing: 1px; margin-top: 4px; }
+        
+        @media (max-width: 768px) {
+          .step-name { display: none; }
+          .step-number { font-size: 18px; }
+          .pipeline-step { padding: 8px 4px; }
+        }
       `}</style>
     </div>
   );

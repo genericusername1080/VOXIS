@@ -1,5 +1,6 @@
 export enum PipelineStep {
   IDLE = 'IDLE',
+  STAGED = 'STAGED',  // File selected, waiting for START
   UPLOAD = 'UPLOAD',
   INGEST = 'INGEST',
   ANALYSIS = 'ANALYSIS',
@@ -22,6 +23,7 @@ export interface ProcessingConfig {
   upscaleFactor: number; // 1x, 2x, 4x
   targetSampleRate: number;
   targetChannels: number; // 1 or 2
+  noiseProfile: 'auto' | 'aggressive' | 'gentle';
 }
 
 export type VisualizerMode = 'WAVEFORM' | 'SPECTRUM' | 'SPECTROGRAM';

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ProcessingConfig } from '../types';
 
 interface SwissSidebarProps {
@@ -9,8 +9,11 @@ interface SwissSidebarProps {
 }
 
 export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, logs, isDisabled }) => {
-  return (
-    <aside className="swiss-sidebar">
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Reusable control content
+  const controls = (
+    <>
       <div className="sidebar-section">
         <div className="sidebar-title">TRINITY ENGINE</div>
         
@@ -31,6 +34,29 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
             onChange={e => setConfig({...config, denoiseStrength: Number(e.target.value)})}
             disabled={isDisabled}
           />
+        </div>
+
+        {/* Noise Profile */}
+        <div className="control-group">
+          <div className="control-label">
+            <span>NOISE PROFILE</span>
+            <span className="control-value">{(config.noiseProfile || 'AUTO').toUpperCase()}</span>
+          </div>
+          <div className="control-bio">
+            Adaptive profile selection. Auto for general use, Aggressive for speech isolation, Gentle for ambience.
+          </div>
+          <div className="btn-group">
+            {['auto', 'aggressive', 'gentle'].map((mode) => (
+              <button
+                key={mode}
+                className={`btn-option ${config.noiseProfile === mode ? 'active' : ''}`}
+                onClick={() => setConfig({...config, noiseProfile: mode as any})}
+                disabled={isDisabled}
+              >
+                {mode === 'auto' ? 'AUTO' : mode === 'aggressive' ? 'AGGR' : 'GENTLE'}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Upscale */}
@@ -123,13 +149,66 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
         BUILT BY GLASS STONE<br />
         VER 2.0.0
       </div>
+    </>
+  );
+
+  return (
+    <>
+      <button className="mobile-menu-btn" onClick={() => setIsOpen(!isOpen)}>
+        {isOpen ? 'CLOSE SETTINGS' : 'TRINITY SETTINGS'}
+      </button>
+
+      <aside className={`swiss-sidebar ${isOpen ? 'open' : ''}`}>
+        {controls}
+      </aside>
 
       <style>{`
         .swiss-sidebar {
           border-right: 4px solid #000;
           display: flex;
           flex-direction: column;
+          background: #fff;
+          width: 280px;
+          height: 100%;
+          overflow-y: auto;
         }
+
+        .mobile-menu-btn {
+          display: none;
+          width: 100%;
+          padding: 16px;
+          background: #000;
+          color: #fff;
+          font-family: 'JetBrains Mono', monospace;
+          font-weight: 700;
+          border: none;
+          cursor: pointer;
+          position: sticky;
+          top: 0;
+          z-index: 20;
+        }
+
+        @media (max-width: 768px) {
+          .swiss-sidebar {
+            position: fixed;
+            top: 0;
+            left: -280px;
+            z-index: 10;
+            transition: left 0.3s ease;
+            height: 100vh;
+            border-right: 4px solid #000;
+            box-shadow: 4px 0 16px rgba(0,0,0,0.2);
+          }
+          
+          .swiss-sidebar.open {
+            left: 0;
+          }
+          
+          .mobile-menu-btn {
+            display: block;
+          }
+        }
+
         .sidebar-section {
           padding: 24px;
           border-bottom: 4px solid #000;
@@ -196,6 +275,6 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
         .log-line { font-family: 'JetBrains Mono'; font-size: 10px; margin-bottom: 4px; color: #666; }
         .sidebar-footer { padding: 24px; font-size: 10px; color: #999; background: #f5f5f5; }
       `}</style>
-    </aside>
+    </>
   );
 };
