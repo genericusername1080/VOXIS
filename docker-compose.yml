@@ -1,0 +1,74 @@
+# ================================================================
+# VOXIS Docker Compose
+# Powered by Trinity | Built by Glass Stone
+# ================================================================
+# Usage:
+#   Development:  docker compose up
+#   Production:   docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+#   Build:        docker compose build
+# ================================================================
+
+services:
+  # =============================================================
+  # Backend - Flask API Server
+  # =============================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: voxis-backend
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      - VOXIS_HOST=0.0.0.0
+      - VOXIS_PORT=5001
+      - VOXIS_DEBUG=false
+      - VOXIS_MAX_FILE_SIZE=524288000  # 500MB
+      - VOXIS_RATE_LIMIT=30
+      - VOXIS_RATE_WINDOW=60
+      - VOXIS_JOB_TIMEOUT=24
+    volumes:
+      - voxis-uploads:/app/uploads
+      - voxis-outputs:/app/outputs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - voxis-network
+
+  # =============================================================
+  # Frontend - React/Vite App (via Nginx)
+  # =============================================================
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: voxis-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - voxis-network
+
+# =============================================================
+# Volumes for persistent data
+# =============================================================
+volumes:
+  voxis-uploads:
+    driver: local
+  voxis-outputs:
+    driver: local
+
+# =============================================================
+# Network
+# =============================================================
+networks:
+  voxis-network:
+    driver: bridge

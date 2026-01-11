@@ -1,0 +1,125 @@
+# ================================================================
+# VOXIS - Cloud Deployment Configuration
+# Powered by Trinity | Built by Glass Stone 2026 -R/D V1A
+# Gabriel Rodriguez CEO Glass Stone
+# ================================================================
+# This file documents how to deploy VOXIS to various cloud platforms
+# ================================================================
+
+# =============================================================
+# RAILWAY DEPLOYMENT
+# =============================================================
+# Railway.app - Easy deploy from GitHub
+# 1. Connect your GitHub repo
+# 2. Railway auto-detects Dockerfile
+# 3. Set environment variables in dashboard
+
+[railway]
+build_command = "cd backend && pip install -r requirements.txt"
+start_command = "cd backend && python server.py"
+
+[[railway.services]]
+name = "voxis-backend"
+region = "us-west1"
+
+[railway.services.env]
+VOXIS_HOST = "0.0.0.0"
+VOXIS_PORT = { default = "5001", type = "port" }
+VOXIS_DEBUG = "false"
+
+
+# =============================================================
+# RENDER DEPLOYMENT
+# =============================================================
+# Create a render.yaml in root for Blueprint deployment
+
+# render.yaml content:
+# services:
+#   - type: web
+#     name: voxis-api
+#     runtime: python
+#     buildCommand: "cd backend && pip install -r requirements.txt"
+#     startCommand: "cd backend && gunicorn server:app -b 0.0.0.0:$PORT"
+#     envVars:
+#       - key: VOXIS_DEBUG
+#         value: false
+#       - key: PYTHON_VERSION
+#         value: "3.11"
+
+
+# =============================================================
+# FLY.IO DEPLOYMENT
+# =============================================================
+# fly.toml configuration
+
+# app = "voxis-backend"
+# primary_region = "lax"
+# 
+# [build]
+#   dockerfile = "backend/Dockerfile"
+# 
+# [http_service]
+#   internal_port = 5001
+#   force_https = true
+#   auto_stop_machines = true
+#   auto_start_machines = true
+#   min_machines_running = 0
+# 
+# [env]
+#   VOXIS_HOST = "0.0.0.0"
+#   VOXIS_PORT = "5001"
+
+
+# =============================================================
+# GOOGLE CLOUD RUN
+# =============================================================
+# Deploy commands:
+# 
+# # Build and push to Container Registry
+# gcloud builds submit --tag gcr.io/PROJECT_ID/voxis-backend ./backend
+# 
+# # Deploy to Cloud Run
+# gcloud run deploy voxis-backend \
+#   --image gcr.io/PROJECT_ID/voxis-backend \
+#   --platform managed \
+#   --region us-central1 \
+#   --allow-unauthenticated \
+#   --memory 2Gi \
+#   --cpu 2 \
+#   --timeout 300 \
+#   --set-env-vars VOXIS_DEBUG=false
+
+
+# =============================================================
+# AWS ECS / FARGATE
+# =============================================================
+# Task Definition (JSON):
+# {
+#   "family": "voxis-backend",
+#   "containerDefinitions": [{
+#     "name": "voxis-backend",
+#     "image": "YOUR_ECR_URI/voxis-backend:latest",
+#     "portMappings": [{
+#       "containerPort": 5001,
+#       "protocol": "tcp"
+#     }],
+#     "environment": [
+#       {"name": "VOXIS_HOST", "value": "0.0.0.0"},
+#       {"name": "VOXIS_PORT", "value": "5001"}
+#     ],
+#     "memory": 2048,
+#     "cpu": 1024
+#   }]
+# }
+
+
+# =============================================================
+# HEROKU DEPLOYMENT
+# =============================================================
+# Procfile content:
+# web: cd backend && gunicorn server:app -b 0.0.0.0:$PORT
+
+# heroku.yml:
+# build:
+#   docker:
+#     web: backend/Dockerfile

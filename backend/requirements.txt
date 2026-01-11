@@ -1,0 +1,28 @@
+# VOXIS Backend Requirements
+# Powered by Trinity | Built by Glass Stone 2026 -R/D V1A
+
+# Web Framework
+flask>=3.0.0
+flask-cors>=4.0.0
+python-dotenv>=1.0.0
+gunicorn>=21.2.0
+
+# Audio Processing Core
+numpy>=1.22,<1.24
+scipy>=1.11.0
+soundfile>=0.12.1
+librosa>=0.10.0
+pydub>=0.25.1
+
+# Noise Reduction (Yazdi9/Audio-Noise-Reduction)
+noisereduce>=3.0.0
+
+# Deep Filtering (Rikorose/DeepFilterNet)
+deepfilternet>=0.5.6
+
+# PyTorch (CPU by default, for GPU see setup.sh)
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# Utilities
+werkzeug>=3.0.0
