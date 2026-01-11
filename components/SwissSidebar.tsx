@@ -20,6 +20,9 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
             <span>DENOISE</span>
             <span className="control-value">{config.denoiseStrength}%</span>
           </div>
+          <div className="control-bio">
+            AI-powered noise reduction using DeepFilterNet. Higher values remove more background noise but may affect audio clarity.
+          </div>
           <input
             type="range"
             min="0"
@@ -34,6 +37,9 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
         <div className="control-group">
           <div className="control-label">
             <span>UPSCALE</span>
+          </div>
+          <div className="control-bio">
+            AudioSR neural upsampling. 1× bypasses, 2× doubles quality, 4× maximum enhancement for low-bitrate sources.
           </div>
           <div className="btn-group">
             {[1, 2, 4].map(f => (
@@ -54,6 +60,9 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
           <div className="control-label">
             <span>SAMPLE RATE</span>
           </div>
+          <div className="control-bio">
+            Output sample rate. 44.1k for CD quality, 48k for video/broadcast, 96k for studio masters.
+          </div>
           <div className="btn-group">
             {[44100, 48000, 96000].map(sr => (
               <button
@@ -70,7 +79,10 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
 
         {/* Toggles */}
         <div className="toggle-row">
-          <span className="toggle-label">HIGH PRECISION</span>
+          <div className="toggle-info">
+            <span className="toggle-label">HIGH PRECISION</span>
+            <div className="toggle-bio">Enhanced DeepFilterNet mode. Slower but better isolation of voice from noise.</div>
+          </div>
           <button
             className="toggle-btn"
             style={{ background: config.highPrecision ? '#ff3300' : '#ccc' }}
@@ -82,7 +94,10 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
         </div>
 
         <div className="toggle-row">
-          <span className="toggle-label">STEREO OUTPUT</span>
+          <div className="toggle-info">
+            <span className="toggle-label">STEREO OUTPUT</span>
+            <div className="toggle-bio">Output as 2-channel stereo. Disable for mono speech recordings.</div>
+          </div>
           <button
             className="toggle-btn"
             style={{ background: config.targetChannels === 2 ? '#ff3300' : '#ccc' }}
@@ -130,9 +145,15 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
         .control-label {
           display: flex; justify-content: space-between;
           font-family: 'JetBrains Mono', monospace; font-size: 11px;
-          font-weight: 500; margin-bottom: 8px;
+          font-weight: 500; margin-bottom: 4px;
         }
         .control-value { color: #ff3300; font-weight: 700; }
+        .control-bio {
+          font-size: 9px;
+          color: #888;
+          line-height: 1.4;
+          margin-bottom: 10px;
+        }
         input[type="range"] {
           -webkit-appearance: none; width: 100%; height: 32px;
           background: #000; border: none; cursor: pointer;
@@ -152,13 +173,21 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
         .btn-option.active { background: #ff3300; color: #fff; }
         .btn-option:hover:not(.active) { background: #000; color: #fff; }
         .toggle-row {
-          display: flex; justify-content: space-between; align-items: center;
+          display: flex; justify-content: space-between; align-items: flex-start;
           padding: 12px 0; border-bottom: 1px solid #eee;
         }
-        .toggle-label { font-size: 12px; font-weight: 500; }
+        .toggle-info { flex: 1; }
+        .toggle-label { font-size: 12px; font-weight: 500; display: block; }
+        .toggle-bio {
+          font-size: 9px;
+          color: #888;
+          line-height: 1.4;
+          margin-top: 4px;
+        }
         .toggle-btn {
           width: 48px; height: 24px; border: 2px solid #000;
           cursor: pointer; position: relative; transition: background 0.2s;
+          flex-shrink: 0;
         }
         .toggle-btn span {
           position: absolute; top: 2px; width: 16px; height: 16px;
