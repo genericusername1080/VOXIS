@@ -1,0 +1,35 @@
+<svg width="600" height="400" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&amp;display=swap');
+      .title { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 24px; fill: #1a1a1a; letter-spacing: -0.5px; }
+      .subtitle { font-family: 'Inter', sans-serif; font-weight: 400; font-size: 14px; fill: #666666; }
+      .arrow { fill: none; stroke: #333; stroke-width: 2; }
+      .grid { stroke: #e0e0e0; stroke-width: 1; }
+    </style>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="600" height="400" fill="#f8f9fa"/>
+  
+  <!-- Grid Pattern -->
+  <line x1="40" y1="0" x2="40" y2="400" class="grid"/>
+  <line x1="560" y1="0" x2="560" y2="400" class="grid"/>
+  <line x1="0" y1="40" x2="600" y2="40" class="grid"/>
+  <line x1="0" y1="360" x2="600" y2="360" class="grid"/>
+  
+  <!-- Text Content -->
+  <text x="60" y="80" class="title">VOXIS</text>
+  <text x="60" y="105" class="subtitle">Audio Restoration System</text>
+  
+  <text x="60" y="320" class="subtitle" style="font-size: 12px; fill: #999;">Drag application to install</text>
+  
+  <!-- Arrow Graphic -->
+  <path d="M180,200 L420,200" class="arrow" stroke-dasharray="4 4"/>
+  <path d="M410,190 L420,200 L410,210" class="arrow"/>
+  
+  <!-- Icon Placeholders (Visual guide, not rendered in final if covered) -->
+  <circle cx="140" cy="200" r="40" fill="none" stroke="#ddd" stroke-dasharray="2 2"/>
+  <circle cx="460" cy="200" r="40" fill="none" stroke="#ddd" stroke-dasharray="2 2"/>
+  
+</svg>
