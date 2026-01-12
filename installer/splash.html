@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>VOXIS</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background: #000;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      -webkit-app-region: drag;
+    }
+    
+    .splash-container {
+      text-align: center;
+    }
+    
+    .logo {
+      font-size: 48px;
+      font-weight: 900;
+      letter-spacing: 8px;
+      margin-bottom: 24px;
+    }
+    
+    .logo span {
+      color: #ff3300;
+    }
+    
+    .status {
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: #666;
+      margin-bottom: 32px;
+    }
+    
+    .loader {
+      width: 80px;
+      height: 4px;
+      background: #333;
+      margin: 0 auto;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .loader::after {
+      content: '';
+      position: absolute;
+      left: -40px;
+      width: 40px;
+      height: 100%;
+      background: #ff3300;
+      animation: slide 1s infinite;
+    }
+    
+    @keyframes slide {
+      0% { left: -40px; }
+      100% { left: 80px; }
+    }
+    
+    .powered-by {
+      position: absolute;
+      bottom: 24px;
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+  <div class="splash-container">
+    <div class="logo">VOXIS<span>.</span></div>
+    <div class="status">INITIALIZING TRINITY ENGINE</div>
+    <div class="loader"></div>
+  </div>
+  <div class="powered-by">POWERED BY TRINITY — BUILT BY GLASS STONE</div>
+</body>
+</html>

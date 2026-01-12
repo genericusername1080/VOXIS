@@ -1,0 +1,52 @@
+# ================================================================
+# VOXIS Production Cloud Deployment
+# Powered by Trinity | Built by Glass Stone
+# ================================================================
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# ================================================================
+
+services:
+  # Override backend for production
+  backend:
+    environment:
+      - VOXIS_DEBUG=false
+      - VOXIS_MAX_FILE_SIZE=1073741824  # 1GB for cloud
+      - VOXIS_JOB_TIMEOUT=72
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # Override frontend for production
+  frontend:
+    environment:
+      - NGINX_SSL=true
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro
+
+  # Add Redis for job queue
+  redis:
+    image: redis:7-alpine
+    container_name: voxis-redis
+    restart: unless-stopped
+    volumes:
+      - voxis-redis:/data
+    networks:
+      - voxis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  voxis-redis:
+    driver: local

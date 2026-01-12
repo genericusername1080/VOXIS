@@ -35,11 +35,47 @@ import shutil
 import logging
 import atexit
 from datetime import datetime, timedelta
+from typing import Dict, Any, Optional
 from functools import wraps
 from collections import defaultdict
+
+# Add local libs directory to path for bundled deployments
+libs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'libs')
+if os.path.exists(libs_path):
+    sys.path.insert(0, libs_path)
+
+# Handle bundled binaries (ffmpeg)
+# When frozen, sys._MEIPASS contains the temp folder path (onefile)
+# For onedir, we rely on sys.executable location + _internal
+if getattr(sys, 'frozen', False):
+    if hasattr(sys, '_MEIPASS'):
+        base_path = sys._MEIPASS
+    else:
+        # onedir mode: binaries are in _internal relative to executable
+        # But wait, PyInstaller onedir puts data in _internal unless configured otherwise
+        # Check if _internal exists next to executable
+        exe_dir = os.path.dirname(sys.executable)
+        if os.path.exists(os.path.join(exe_dir, '_internal')):
+            base_path = os.path.join(exe_dir, '_internal')
+        else:
+            base_path = exe_dir
+
+    # Determine OS-specific bin folder
+    if sys.platform == 'win32':
+        bin_path = os.path.join(base_path, 'bin', 'win')
+    elif sys.platform == 'darwin':
+        bin_path = os.path.join(base_path, 'bin', 'mac')
+    else:
+        bin_path = os.path.join(base_path, 'bin', 'linux')
+
+    if os.path.exists(bin_path):
+        os.environ["PATH"] = bin_path + os.pathsep + os.environ["PATH"]
+        logging.info(f"Added bundled binaries to PATH: {bin_path}")
+
 from flask import Flask, request, jsonify, send_file, g
-from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from flask_cors import CORS
+from dotenv import load_dotenv
 
 # Initialize structured logging
 logging.basicConfig(
@@ -362,7 +398,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'service': 'VOXIS Backend',
-        'version': '2.0.0',
+        'version': '1.0.5',
         'powered_by': 'Trinity',
         'built_by': 'Glass Stone',
         'timestamp': datetime.utcnow().isoformat(),

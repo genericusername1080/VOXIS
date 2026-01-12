@@ -1,0 +1,64 @@
+# VOXIS Cloud Deployment
+# GPU-enabled backend for demanding audio processing tasks
+
+services:
+  voxis-cloud:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.gpu
+    image: voxis-cloud:latest
+    container_name: voxis-cloud
+    ports:
+      - "5001:5001"
+    environment:
+      - VOXIS_ENV=production
+      - VOXIS_GPU_ENABLED=true
+      - VOXIS_MAX_FILE_SIZE=2147483648  # 2GB for cloud
+      - VOXIS_JOB_TIMEOUT=72  # 3 days for long jobs
+    volumes:
+      - voxis-uploads:/app/uploads
+      - voxis-outputs:/app/outputs
+      - voxis-models:/app/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for job queue (optional, for scaling)
+  redis:
+    image: redis:7-alpine
+    container_name: voxis-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - voxis-redis:/data
+    restart: unless-stopped
+
+  # Nginx reverse proxy with SSL
+  nginx:
+    image: nginx:alpine
+    container_name: voxis-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - voxis-cloud
+    restart: unless-stopped
+
+volumes:
+  voxis-uploads:
+  voxis-outputs:
+  voxis-models:
+  voxis-redis:

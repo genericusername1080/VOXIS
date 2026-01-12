@@ -13,6 +13,7 @@ scipy>=1.11.0
 soundfile>=0.12.1
 librosa>=0.10.0
 pydub>=0.25.1
+resampy>=0.4.2
 
 # Noise Reduction (Yazdi9/Audio-Noise-Reduction)
 noisereduce>=3.0.0
@@ -26,3 +27,6 @@ torchaudio>=2.0.0
 
 # Utilities
 werkzeug>=3.0.0
+pyinstaller>=6.0.0
+pywin32>=306; sys_platform == 'win32'
+pypiwin32>=223; sys_platform == 'win32'

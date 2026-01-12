@@ -147,7 +147,7 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
       <div className="sidebar-footer">
         POWERED BY TRINITY<br />
         BUILT BY GLASS STONE<br />
-        VER 2.0.0
+        VER 1.0.5
       </div>
     </>
   );

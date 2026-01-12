@@ -1,0 +1,92 @@
+{
+  "name": "voxis-installer",
+  "productName": "VOXIS",
+  "version": "1.0.5",
+  "description": "VOXIS Audio Restoration Desktop Installer",
+  "author": "Glass Stone - Gabriel Rodriguez, CEO",
+  "license": "MIT",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --mac --win --linux"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^39.2.7",
+    "electron-builder": "^26.4.0"
+  },
+  "build": {
+    "appId": "com.glassstone.voxis",
+    "productName": "VOXIS",
+    "copyright": "Copyright © 2026 Glass Stone",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "splash.html",
+      "app/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/dist/voxis_backend",
+        "to": "backend/dist/voxis_backend",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../dist",
+        "to": "dist",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64", "x64"]
+        }
+      ]
+    },
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "category": "AudioVideo",
+      "target": ["AppImage", "deb"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "dmg": {
+      "background": "assets/dmg-background.png",
+      "iconSize": 128
+    }
+  }
+}
