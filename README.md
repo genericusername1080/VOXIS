@@ -96,6 +96,7 @@ See [Cloud README](cloud/README.md) for full setup.
 
 | Document | Description |
 |----------|-------------|
+| [Trinity Technical Docs](docs/TRINITY_TECHNICAL.md) | ML pipeline architecture |
 | [User Guide](docs/USER_GUIDE.md) | How to use the app |
 | [Installer Guide](docs/INSTALLER_GUIDE.md) | Desktop app installation |
 | [Deployment](docs/DEPLOYMENT.md) | Docker, Cloud, Environment |
