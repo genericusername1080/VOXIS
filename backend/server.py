@@ -25,6 +25,7 @@ Endpoints:
 """
 
 import os
+import patch_torchaudio # FIX: Compatibility for DeepFilterNet with Torch 2.x
 import sys
 import uuid
 import json
@@ -429,6 +430,34 @@ def get_stats():
             'max_requests': config.RATE_LIMIT_REQUESTS,
             'window_seconds': config.RATE_LIMIT_WINDOW
         }
+    })
+
+
+@app.route('/api/system/models', methods=['GET'])
+def get_model_status():
+    """Get status of AI models."""
+    models_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
+    
+    # Check AudioSR
+    audiosr_path = os.path.join(models_dir, 'AudioSR', 'audiosr-basic')
+    audiosr_status = {
+        'available': os.path.exists(audiosr_path),
+        'path': audiosr_path if os.path.exists(audiosr_path) else None,
+        'model': 'audiosr-basic'
+    }
+    
+    # Check DeepFilterNet (checking for generic presence since it's harder to check specific weights without loading)
+    df_dir = os.path.join(models_dir, 'DeepFilterNet')
+    df_status = {
+        'available': os.path.exists(df_dir) and len(os.listdir(df_dir)) > 0 if os.path.exists(df_dir) else False,
+        'path': df_dir,
+        'model': 'DeepFilterNet3'
+    }
+    
+    return jsonify({
+        'audiosr': audiosr_status,
+        'deepfilternet': df_status,
+        'pipeline_loaded': PIPELINE_AVAILABLE
     })
 
 

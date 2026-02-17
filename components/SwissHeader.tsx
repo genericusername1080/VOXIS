@@ -49,6 +49,13 @@ export const SwissHeader: React.FC<SwissHeaderProps> = ({ status }) => (
         background: #000;
         color: #fff;
         gap: 24px;
+        /* Electron Drag Region */
+        -webkit-app-region: drag;
+      }
+      
+      .header-left, .header-center, .swiss-status {
+        /* Ensure content is clickable/selectable if needed */
+        -webkit-app-region: no-drag;
       }
       
       .header-left {

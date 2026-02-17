@@ -9,13 +9,19 @@ This module orchestrates the complete audio processing pipeline:
 """
 
 import os
+import patch_torchaudio  # FIX: Compatibility for DeepFilterNet with Torch 2.x
 import numpy as np
 import soundfile as sf
+import torch
+import torchaudio
+import torchaudio.functional as F
+import torchaudio.transforms as T
 import librosa
 import noisereduce as nr
 from typing import Dict, Any, Callable, Optional
 import tempfile
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 
 # DeepFilterNet imports
 try:
@@ -64,39 +70,72 @@ class VoxisPipeline:
         self.target_sample_rate = target_sample_rate
         self.target_channels = target_channels
         
+        # Local models path
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        self.models_dir = os.path.join(base_path, 'models')
+        
         # Initialize DeepFilterNet model
         self.df_model = None
         self.df_state = None
         if DEEPFILTER_AVAILABLE:
             try:
-                self.df_model, self.df_state, _ = init_df()
+                # Point to bundled models
+                df_base = os.path.join(self.models_dir, "DeepFilterNet")
+                if os.path.exists(df_base):
+                    print(f"Loading DeepFilterNet from bundled path: {df_base}")
+                    self.df_model, self.df_state, _ = init_df(model_base_dir=df_base, config_allow_defaults=True)
+                else:
+                    print(f"Bundled DeepFilterNet not found at {df_base}, checking default cache")
+                    self.df_model, self.df_state, _ = init_df(config_allow_defaults=True)
+                    
                 print("DeepFilterNet model loaded successfully")
             except Exception as e:
                 print(f"Failed to load DeepFilterNet: {e}")
+                import traceback
+                traceback.print_exc()
         
         # Initialize AudioSR model
         self.audiosr_model = None
         if AUDIOSR_AVAILABLE:
             try:
-                self.audiosr_model = build_model(model_name="basic", device="cpu")
+                # Check for local AudioSR model
+                model_name = "basic"
+                local_model_path = os.path.join(self.models_dir, "AudioSR", f"audiosr-{model_name}")
+                
+                if os.path.exists(local_model_path):
+                    print(f"Loading AudioSR from local path: {local_model_path}")
+                    self.audiosr_model = build_model(model_name=local_model_path, device="cpu")
+                else:
+                    print(f"Local AudioSR not found at {local_model_path}, using default download method")
+                    self.audiosr_model = build_model(model_name=model_name, device="cpu")
+                    
                 print("AudioSR model loaded successfully")
             except Exception as e:
                 print(f"Failed to load AudioSR: {e}")
     
+    def _resample(self, audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
+        """Faster resampling using torchaudio"""
+        if orig_sr == target_sr:
+            return audio
+            
+        try:
+            # Convert to torch tensor
+            waveform = torch.from_numpy(audio).float()
+            
+            # Use torchaudio functional resample
+            resampled = F.resample(waveform, orig_freq=orig_sr, new_freq=target_sr)
+            
+            return resampled.numpy()
+        except Exception as e:
+            print(f"Torchaudio resampling failed, falling back to librosa: {e}")
+            return librosa.resample(audio, orig_sr=orig_sr, target_sr=target_sr)
+
     def process(self, 
                 input_path: str, 
                 output_path: str,
                 progress_callback: Optional[Callable[[str, int], None]] = None) -> Dict[str, Any]:
         """
         Process audio through the complete pipeline.
-        
-        Args:
-            input_path: Path to input audio file
-            output_path: Path for output audio file
-            progress_callback: Optional callback(stage_name, progress_percent)
-            
-        Returns:
-            Dictionary with processing metadata and results
         """
         results = {
             "input_file": input_path,
@@ -110,13 +149,16 @@ class VoxisPipeline:
                 progress_callback(stage, progress)
         
         try:
-            # Load input audio
+            # Load input audio with soundfile (faster than librosa)
             update_progress("upload", 0)
-            audio, sr = librosa.load(input_path, sr=None, mono=False)
-            
-            # Handle mono/stereo
-            if audio.ndim == 1:
-                audio = audio.reshape(1, -1)
+            try:
+                audio, sr = sf.read(input_path, always_2d=True)
+                audio = audio.T  # Transpose to (channels, samples)
+            except Exception:
+                # Fallback to librosa if soundfile fails (e.g. mp3)
+                audio, sr = librosa.load(input_path, sr=None, mono=False)
+                if audio.ndim == 1:
+                    audio = audio.reshape(1, -1)
             
             original_sr = sr
             original_channels = audio.shape[0]
@@ -132,28 +174,16 @@ class VoxisPipeline:
             update_progress("ingest", 100)
             
             # ============================================
-            # STAGE 1: Spectrum Analysis (noisereduce)
-            # Using Yazdi9/Audio-Noise-Reduction approach
+            # STAGE 1: Spectrum Analysis
             # ============================================
             update_progress("analysis", 0)
             
-            # Process each channel
-            analyzed_audio = []
+            # Analyze noise profile without full reduction for speed
             noise_profiles = []
             
+            # We can parallelize analysis if needed, but it's fast enough usually
             for ch_idx in range(audio.shape[0]):
                 channel = audio[ch_idx]
-                
-                # Compute noise profile using spectral gating
-                # This is the Yazdi9 approach - stationary noise reduction
-                noise_profile = nr.reduce_noise(
-                    y=channel,
-                    sr=sr,
-                    stationary=True,
-                    prop_decrease=0.0,  # Just analyze, don't reduce yet
-                    n_fft=2048,
-                    hop_length=512
-                )
                 
                 # Get spectrum data for visualization
                 stft = librosa.stft(channel, n_fft=2048, hop_length=512)
@@ -168,56 +198,61 @@ class VoxisPipeline:
                     "peak_frequency_hz": float(peak_freq),
                     "dynamic_range_db": float(dynamic_range)
                 })
-                
-                analyzed_audio.append(channel)
             
-            analyzed_audio = np.array(analyzed_audio)
             results["stages"]["analysis"] = {
                 "noise_profiles": noise_profiles,
-                "method": "spectral_gating_stationary"
+                "method": "spectral_analysis_fast"
             }
             
             update_progress("analysis", 100)
             
             # ============================================
             # STAGE 2: Denoising (DeepFilterNet)
-            # Using Rikorose/DeepFilterNet - HIGH strength
             # ============================================
             update_progress("denoise", 0)
             
             if DEEPFILTER_AVAILABLE and self.df_model is not None:
-                # DeepFilterNet expects 48kHz input
-                # Resample if needed
+                # DeepFilterNet expects 48kHz
                 if sr != 48000:
-                    resampled_audio = librosa.resample(
-                        analyzed_audio, 
-                        orig_sr=sr, 
-                        target_sr=48000
-                    )
+                    resampled_audio = self._resample(audio, sr, 48000)
                     df_sr = 48000
                 else:
-                    resampled_audio = analyzed_audio
+                    resampled_audio = audio
                     df_sr = sr
                 
-                # DeepFilterNet processes mono, so handle each channel
-                denoised_channels = []
-                for ch_idx in range(resampled_audio.shape[0]):
-                    channel = resampled_audio[ch_idx]
+                # Parallel processing for channels
+                denoised_channels = [None] * resampled_audio.shape[0]
+                
+                def process_channel(idx_and_channel):
+                    idx, channel = idx_and_channel
+                    try:
+                        enhanced = enhance(
+                            self.df_model, 
+                            self.df_state, 
+                            channel,
+                            atten_lim_db=None if self.high_precision else 12
+                        )
+                        blended = (self.denoise_strength * enhanced + 
+                                  (1 - self.denoise_strength) * channel)
+                        return idx, blended
+                    except Exception as e:
+                        print(f"Error processing channel {idx}: {e}")
+                        return idx, channel # Fallback to original
+
+                # Use ThreadPoolExecutor for parallel channel processing
+                # Note: PyTorch/DeepFilterNet might already be multi-threaded, so gain depends on GIL release
+                with ThreadPoolExecutor(max_workers=min(resampled_audio.shape[0], 4)) as executor:
+                    futures = [
+                        executor.submit(process_channel, (i, resampled_audio[i])) 
+                        for i in range(resampled_audio.shape[0])
+                    ]
                     
-                    # Apply DeepFilterNet
-                    enhanced = enhance(
-                        self.df_model, 
-                        self.df_state, 
-                        channel,
-                        atten_lim_db=None if self.high_precision else 12
-                    )
-                    
-                    # Apply strength blending
-                    blended = (self.denoise_strength * enhanced + 
-                              (1 - self.denoise_strength) * channel)
-                    
-                    denoised_channels.append(blended)
-                    update_progress("denoise", int(50 + (ch_idx + 1) / resampled_audio.shape[0] * 50))
+                    completed = 0
+                    for future in futures:
+                        idx, result = future.result()
+                        denoised_channels[idx] = result
+                        completed += 1
+                        update_progress("denoise", int(completed / resampled_audio.shape[0] * 100))
                 
                 denoised_audio = np.array(denoised_channels)
                 current_sr = df_sr
@@ -229,12 +264,12 @@ class VoxisPipeline:
                     "model": "DeepFilterNet3" if self.high_precision else "DeepFilterNet2"
                 }
             else:
-                # Fallback to noisereduce if DeepFilterNet unavailable
-                denoised_channels = []
-                for ch_idx in range(analyzed_audio.shape[0]):
-                    channel = analyzed_audio[ch_idx]
-                    
-                    # Apply noisereduce with strength
+                # Fallback to noisereduce
+                 # Process channels in parallel
+                denoised_channels = [None] * audio.shape[0]
+                
+                def reduce_channel(idx_and_channel):
+                    idx, channel = idx_and_channel
                     reduced = nr.reduce_noise(
                         y=channel,
                         sr=sr,
@@ -243,8 +278,16 @@ class VoxisPipeline:
                         n_fft=2048,
                         hop_length=512
                     )
-                    denoised_channels.append(reduced)
-                    update_progress("denoise", int(50 + (ch_idx + 1) / analyzed_audio.shape[0] * 50))
+                    return idx, reduced
+
+                with ThreadPoolExecutor(max_workers=min(audio.shape[0], 4)) as executor:
+                    futures = [
+                        executor.submit(reduce_channel, (i, audio[i]))
+                        for i in range(audio.shape[0])
+                    ]
+                    for future in futures:
+                        idx, result = future.result()
+                        denoised_channels[idx] = result
                 
                 denoised_audio = np.array(denoised_channels)
                 current_sr = sr
@@ -252,27 +295,22 @@ class VoxisPipeline:
                 results["stages"]["denoise"] = {
                     "method": "noisereduce_fallback",
                     "strength": self.denoise_strength,
-                    "note": "DeepFilterNet not available, using noisereduce"
+                    "note": "DeepFilterNet not available"
                 }
             
             update_progress("denoise", 100)
             
             # ============================================
             # STAGE 3: Upscaling (AudioSR)
-            # Using ORI-Muchim/AudioSR-Upsampling
-            # Target: 48kHz stereo high-quality output
             # ============================================
             update_progress("upscale", 0)
             
             if AUDIOSR_AVAILABLE and self.audiosr_model is not None and self.upscale_factor > 1:
-                # AudioSR requires saving to temp file
                 with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
                     tmp_input = tmp.name
-                    # Write current audio to temp file
                     sf.write(tmp_input, denoised_audio.T, current_sr)
                 
                 try:
-                    # Run AudioSR super-resolution
                     upscaled = super_resolution(
                         self.audiosr_model,
                         tmp_input,
@@ -280,8 +318,6 @@ class VoxisPipeline:
                         guidance_scale=3.5,
                         ddim_steps=50
                     )
-                    
-                    # AudioSR outputs 48kHz
                     final_audio = upscaled
                     final_sr = 48000
                     
@@ -291,53 +327,50 @@ class VoxisPipeline:
                         "output_sr": final_sr,
                         "factor": self.upscale_factor
                     }
+                except Exception as e:
+                    print(f"AudioSR failed: {e}. Falling back to resample.")
+                    # Fallback if AudioSR fails
+                    final_audio = self._resample(denoised_audio, current_sr, self.target_sample_rate)
+                    final_sr = self.target_sample_rate
                 finally:
-                    os.unlink(tmp_input)
+                    if os.path.exists(tmp_input):
+                        os.unlink(tmp_input)
                 
                 update_progress("upscale", 80)
             else:
-                # Fallback: High-quality resampling with librosa
+                 # Fast resample to target
                 if current_sr != self.target_sample_rate:
-                    final_audio = librosa.resample(
-                        denoised_audio,
-                        orig_sr=current_sr,
-                        target_sr=self.target_sample_rate,
-                        res_type='kaiser_best'
-                    )
+                    final_audio = self._resample(denoised_audio, current_sr, self.target_sample_rate)
                     final_sr = self.target_sample_rate
                 else:
                     final_audio = denoised_audio
                     final_sr = current_sr
                 
                 results["stages"]["upscale"] = {
-                    "method": "librosa_resample" if not AUDIOSR_AVAILABLE else "skipped",
+                    "method": "torchaudio_resample" if not AUDIOSR_AVAILABLE else "skipped",
                     "input_sr": current_sr,
                     "output_sr": final_sr,
                     "note": "AudioSR not available" if not AUDIOSR_AVAILABLE else "Upscale factor is 1"
                 }
             
-            # Ensure stereo output if requested
+            # Ensure stereo/mono output
             if self.target_channels == 2 and final_audio.shape[0] == 1:
-                # Duplicate mono to stereo
                 final_audio = np.vstack([final_audio[0], final_audio[0]])
             elif self.target_channels == 1 and final_audio.shape[0] == 2:
-                # Mix to mono
                 final_audio = np.mean(final_audio, axis=0, keepdims=True)
             
             update_progress("upscale", 100)
             
             # ============================================
             # STAGE 4: Export
-            # Write final high-quality WAV file
             # ============================================
             update_progress("export", 0)
             
-            # Normalize to prevent clipping
+            # Normalize
             max_val = np.max(np.abs(final_audio))
             if max_val > 0.99:
                 final_audio = final_audio * 0.99 / max_val
             
-            # Write output (channels last for soundfile)
             sf.write(output_path, final_audio.T, final_sr, subtype='PCM_24')
             
             results["output_metadata"] = {
@@ -362,7 +395,6 @@ class VoxisPipeline:
 
 
 def create_pipeline(config: Dict[str, Any]) -> VoxisPipeline:
-    """Factory function to create a configured pipeline."""
     return VoxisPipeline(
         denoise_strength=config.get("denoise_strength", 0.75),
         high_precision=config.get("high_precision", True),

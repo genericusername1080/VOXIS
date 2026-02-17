@@ -124,6 +124,25 @@ const App: React.FC = () => {
     setDownloadUrl(null);
     addLog('PROCESSING.START');
 
+    // Check models on connect
+    useEffect(() => {
+      if (backendStatus === 'online') {
+        fetch('http://localhost:5001/api/system/models')
+          .then(res => res.json())
+          .then(data => {
+            const df = data.deepfilternet?.available ? 'OK' : 'MISSING';
+            const asr = data.audiosr?.available ? 'OK' : 'MISSING';
+            addLog(`MODELS: DF=${df} ASR=${asr}`);
+            
+            // Warn if missing
+            if (df === 'MISSING' || asr === 'MISSING') {
+              setError('MODELS MISSING (Check Logs)');
+            }
+          })
+          .catch(() => addLog('MODELS: CHECK_FAILED'));
+      }
+    }, [backendStatus, addLog]);
+
     try {
       const upload = await apiService.uploadFile(file, setProgress);
       if (!upload.success) throw new Error(upload.error);

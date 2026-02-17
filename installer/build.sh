@@ -26,6 +26,11 @@ cd "$SCRIPT_DIR"
 npm install
 echo "✅ Dependencies installed"
 
+echo ""
+echo "📦 Bundling FFmpeg..."
+bash "$PARENT_DIR/scripts/install_ffmpeg.sh"
+
+
 # Step 3: Build for target platform
 PLATFORM=${1:-mac}
 echo ""

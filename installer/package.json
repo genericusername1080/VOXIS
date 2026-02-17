@@ -19,10 +19,10 @@
     "build:linux": "electron-builder --linux",
     "build:all": "electron-builder --mac --win --linux"
   },
-  "dependencies": {},
   "devDependencies": {
     "electron": "^39.2.7",
-    "electron-builder": "^26.4.0"
+    "electron-builder": "^26.4.0",
+    "ffmpeg-static": "^5.3.0"
   },
   "build": {
     "appId": "com.glassstone.voxis",
@@ -42,12 +42,23 @@
       {
         "from": "../backend/dist/voxis_backend",
         "to": "backend/dist/voxis_backend",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../backend/models",
+        "to": "backend/models",
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "../dist",
         "to": "dist",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
@@ -56,11 +67,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ]
     },
@@ -69,11 +86,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -81,7 +102,10 @@
       "icon": "assets/icon.png",
       "category": "AudioVideo",
       "maintainer": "Gabriel Rodriguez <gabriel@glassstone.io>",
-      "target": ["AppImage", "deb"]
+      "target": [
+        "AppImage",
+        "deb"
+      ]
     },
     "nsis": {
       "oneClick": false,

@@ -55,6 +55,9 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
+# Add bundled binaries to PATH
+export PATH="$SCRIPT_DIR/backend/bin:$PATH"
+
 # Check for FFmpeg (required for audio format conversion)
 if ! command -v ffmpeg &> /dev/null; then
     echo -e "${YELLOW}Installing FFmpeg (required for audio export)...${NC}"

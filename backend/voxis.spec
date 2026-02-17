@@ -34,6 +34,7 @@ datas.append(('bin', 'bin'))  # Include bin directory recursively
 datas.extend(collect_data_files('librosa'))
 datas.extend(collect_data_files('resampy'))
 datas.extend(collect_data_files('deepfilternet'))
+datas.append(('models', 'models'))
 
 # Handling metadata for packages that check their own version
 datas.extend(copy_metadata('tqdm'))

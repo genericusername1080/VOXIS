@@ -137,17 +137,38 @@ async function startBackend() {
       const execName = process.platform === 'win32' ? 'voxis_backend.exe' : 'voxis_backend';
       const execPath = path.join(backendDistPath, execName);
 
+      // Add bundled bin to PATH for FFmpeg
+      const binPath = getResourcePath(path.join('backend', 'bin'));
+      const currentPath = process.env.PATH || '';
+      const newPath = `${binPath}${path.delimiter}${currentPath}`;
+      console.log('[VOXIS] Adding to PATH:', binPath);
+
       if (fs.existsSync(execPath)) {
         console.log('[VOXIS] Found bundled backend executable:', execPath);
         startCmd = execPath;
         startArgs = [];
-        startOptions = { cwd: backendDistPath, env: { ...process.env, VOXIS_PORT: BACKEND_PORT, VOXIS_ROOT_PATH: backendDistPath } };
+        startOptions = { 
+          cwd: backendDistPath, 
+          env: { 
+            ...process.env, 
+            VOXIS_PORT: BACKEND_PORT, 
+            VOXIS_ROOT_PATH: backendDistPath,
+            PATH: newPath 
+          } 
+        };
       } else {
         // Fallback to python script if executable not found (or legacy build)
         console.log('[VOXIS] Bundled executable not found, falling back to python script');
         startCmd = pythonCmd;
         startArgs = [path.join(backendPath, 'server.py')];
-        startOptions = { cwd: backendPath, env: { ...process.env, VOXIS_PORT: BACKEND_PORT } };
+        startOptions = { 
+          cwd: backendPath, 
+          env: { 
+            ...process.env, 
+            VOXIS_PORT: BACKEND_PORT,
+            PATH: newPath
+          } 
+        };
       }
     }
     
