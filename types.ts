@@ -10,8 +10,9 @@ export enum PipelineStep {
   UPLOAD = 'UPLOAD',
   INGEST = 'INGEST',
   ANALYSIS = 'ANALYSIS',
-  DENSE = 'DENSE',
   DENOISE = 'DENOISE',
+  DENSE = 'DENSE',
+  RESTORE = 'RESTORE',
   UPSCALE = 'UPSCALE',
   EXPORT = 'EXPORT',
   COMPLETE = 'COMPLETE'
@@ -38,3 +39,43 @@ export interface ProcessingConfig {
   noiseProfile: 'auto' | 'aggressive' | 'gentle';
 }
 
+export type ExportFormat = 'wav' | 'flac' | 'mp3' | 'aac';
+
+export interface SpectrumData {
+  frequencies: Float32Array;
+  magnitudes: Float32Array;
+  noiseFloor: number;
+  peakFrequency: number;
+  dynamicRange: number;
+}
+
+export interface ProcessingStage {
+  name: string;
+  status: 'pending' | 'active' | 'complete' | 'error';
+  progress: number;
+  startTime?: number;
+  endTime?: number;
+  metadata?: Record<string, string | number>;
+}
+
+export interface PipelineState {
+  stages: ProcessingStage[];
+  currentStageIndex: number;
+  totalProgress: number;
+  startTime: number | null;
+  endTime: number | null;
+}
+
+export interface ExportConfig {
+  format: ExportFormat;
+  quality: 'low' | 'medium' | 'high';
+  filename: string;
+}
+
+export type InputSource = 'file' | 'recording' | 'video';
+
+export interface RecordingState {
+  isRecording: boolean;
+  duration: number;
+  level: number;
+}

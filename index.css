@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================================================================
+   VOXIS 4 Dense — Bauhaus Design System
+   Powered by Trinity 8.1 | Built by Glass Stone
+   Copyright (c) 2026 Glass Stone. All rights reserved.
+   ================================================================ */
+
+:root {
+  /* Bauhaus Palette */
+  --bg-cream: #F2F0E6;
+  --primary-red: #E31C23;
+  --primary-blue: #005696;
+  --primary-yellow: #FFC919;
+  --primary-green: #00A651;
+  --charcoal: #1A1A1A;
+  --white: #FFFFFF;
+
+  /* Additional Grayscale */
+  --grey-100: #F3F4F6;
+  --grey-200: #E5E7EB;
+  --grey-300: #D1D5DB;
+  --grey-400: #9CA3AF;
+  --grey-500: #6B7280;
+  --grey-600: #4B5563;
+  --grey-700: #374151;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Borders */
+  --border-thick: 3px solid var(--charcoal);
+  --border-thin: 1px solid var(--charcoal);
+}
+
+@layer base {
+  html,
+  body {
+    @apply h-full font-sans bg-[var(--bg-cream)] text-[var(--charcoal)] antialiased overflow-hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-black uppercase tracking-tight;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-cream); border-left: 1px solid var(--charcoal); }
+  ::-webkit-scrollbar-thumb { background: var(--primary-blue); border-radius: 0; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--primary-red); }
+}

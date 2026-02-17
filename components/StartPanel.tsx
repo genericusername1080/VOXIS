@@ -1,5 +1,7 @@
 import React from 'react';
 import { AudioMetadata, ProcessingConfig } from '../types';
+import { BauhausCard } from './BauhausCard';
+import { BauhausButton } from './BauhausButton';
 
 interface StartPanelProps {
   metadata: AudioMetadata | null;
@@ -9,39 +11,48 @@ interface StartPanelProps {
 }
 
 export const StartPanel: React.FC<StartPanelProps> = ({ metadata, config, onStart, onCancel }) => {
-  const fmt = (b: number) => b < 1048576 ? `${(b/1024).toFixed(1)} KB` : `${(b/1048576).toFixed(1)} MB`;
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
-    <div className="start-panel">
-      <div className="start-title">Ready</div>
+    <BauhausCard className="w-full max-w-2xl text-center bg-white p-12">
+      <h2 className="text-3xl font-black uppercase tracking-widest mb-8">Ready to Process</h2>
+
       {metadata && (
-        <div className="file-info">
-          <div className="file-name">{metadata.name}</div>
-          <div className="file-meta">{fmt(metadata.size)}</div>
+        <div className="bg-[var(--bg-cream)] border-2 border-black p-4 mb-8 inline-block min-w-[300px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <div className="font-bold text-lg mb-1">{metadata.name}</div>
+          <div className="font-mono text-xs text-[var(--grey-600)]">{formatSize(metadata.size)} {metadata.format ? `\u2022 ${metadata.format.toUpperCase()}` : ''}</div>
         </div>
       )}
-      <div className="config-summary">
-        <div className="ci"><span className="cl">MODE</span><span className="cv">{config.mode.toUpperCase()}</span></div>
-        <div className="ci"><span className="cl">DENOISE</span><span className="cv">{config.denoiseStrength}%</span></div>
-        <div className="ci"><span className="cl">UPSCALE</span><span className="cv">{config.upscaleFactor}x</span></div>
-        <div className="ci"><span className="cl">OUTPUT</span><span className="cv">{config.targetSampleRate/1000}k {config.targetChannels===2?'ST':'MO'}</span></div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        <ConfigItem label="MODE" value={config.mode.toUpperCase()} />
+        <ConfigItem label="DENOISE" value={`${config.denoiseStrength}%`} color="text-[var(--primary-red)]" />
+        <ConfigItem label="UPSCALE" value={`${config.upscaleFactor}x`} />
+        <ConfigItem label="OUTPUT" value={`${config.targetSampleRate / 1000}kHz`} />
       </div>
-      <button className="start-btn" onClick={onStart}>START PROCESSING</button>
-      <button className="cancel-btn" onClick={onCancel}>Cancel</button>
-      <style>{`
-        .start-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; background: #fff; margin: 20px; border: 3px solid #000; }
-        .start-title { font-size: 24px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 20px; }
-        .file-info { text-align: center; margin-bottom: 24px; padding: 12px 24px; background: #f7f7f7; border: 2px solid #000; }
-        .file-name { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; word-break: break-all; }
-        .file-meta { font-size: 11px; color: #666; margin-top: 2px; }
-        .config-summary { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; justify-content: center; }
-        .ci { display: flex; flex-direction: column; align-items: center; padding: 8px 16px; border: 2px solid #000; }
-        .cl { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: #666; }
-        .cv { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: #ff3300; }
-        .start-btn { padding: 16px 48px; background: #ff3300; color: #fff; border: 3px solid #000; font-size: 14px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; transition: all 0.1s; }
-        .start-btn:hover { background: #000; }
-        .cancel-btn { margin-top: 12px; background: none; border: none; font-size: 11px; text-decoration: underline; cursor: pointer; color: #666; }
-        @media (max-width: 768px) { .config-summary { flex-direction: column; gap: 8px; } .start-btn { padding: 14px 32px; font-size: 12px; } }
-      `}</style>
-    </div>
+
+      <div className="flex flex-col items-center gap-4">
+        <BauhausButton onClick={onStart} variant="primary" className="w-64 text-lg">
+          Start Processing
+        </BauhausButton>
+        <button
+          className="text-xs font-bold uppercase tracking-widest text-[var(--grey-500)] hover:text-black hover:underline"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+      </div>
+    </BauhausCard>
   );
 };
+
+const ConfigItem = ({ label, value, color = "text-black" }: { label: string, value: string, color?: string }) => (
+  <div className="border border-black p-3 bg-white">
+    <div className="text-[9px] font-bold uppercase text-[var(--grey-500)] mb-1">{label}</div>
+    <div className={`font-black uppercase text-sm ${color}`}>{value}</div>
+  </div>
+);

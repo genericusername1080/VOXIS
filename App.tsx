@@ -1,297 +1,194 @@
 /**
- * VOXIS 4 Dense
+ * VOXIS 4 Dense — Main Application Controller
  * Powered by Trinity 8.1 | Built by Glass Stone
  * Copyright (c) 2026 Glass Stone. All rights reserved.
  */
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { PipelineStep, AudioMetadata, ProcessingConfig } from './types';
-import { apiService, JobStatus } from './services/apiService';
-import { useNetworkStatus, useOperationQueue } from './services/networkResilience';
 
-import { SwissHeader } from './components/SwissHeader';
-import { SwissSidebar } from './components/SwissSidebar';
+import React, { useState, useCallback } from 'react';
+import { PipelineStep, ProcessingConfig, AudioMetadata } from './types';
+import { BauhausHeader } from './components/BauhausHeader';
+import { BauhausSidebar } from './components/BauhausSidebar';
+import { BauhausFooter } from './components/BauhausFooter';
+import { BauhausPlayer } from './components/BauhausPlayer';
 import { PipelineDisplay } from './components/PipelineDisplay';
 import { FileDropZone } from './components/FileDropZone';
 import { ProcessingStatus } from './components/ProcessingStatus';
-import { CompletionPanel } from './components/CompletionPanel';
-import { SwissPlayer } from './components/SwissPlayer';
-import { SwissFooter } from './components/SwissFooter';
-import { OfflineBanner } from './components/OfflineBanner';
 import { StartPanel } from './components/StartPanel';
+import { CompletionPanel } from './components/CompletionPanel';
+import { OfflineBanner } from './components/OfflineBanner';
+import { apiService } from './services/apiService';
+import { useNetworkStatus } from './services/networkResilience';
 
 const PIPELINE_STEPS = [
-  { id: PipelineStep.UPLOAD, label: '01', name: 'UPLOAD' },
-  { id: PipelineStep.INGEST, label: '02', name: 'INGEST' },
-  { id: PipelineStep.ANALYSIS, label: '03', name: 'SPECTRUM' },
-  { id: PipelineStep.DENSE, label: '04', name: 'DENSE' },
-  { id: PipelineStep.DENOISE, label: '05', name: 'DENOISE' },
-  { id: PipelineStep.UPSCALE, label: '06', name: 'UPSCALE' },
-  { id: PipelineStep.EXPORT, label: '07', name: 'EXPORT' },
+  { id: PipelineStep.UPLOAD, label: '1', name: 'UPLOAD' },
+  { id: PipelineStep.INGEST, label: '2', name: 'INGEST' },
+  { id: PipelineStep.ANALYSIS, label: '3', name: 'SPECTRUM' },
+  { id: PipelineStep.DENOISE, label: '4', name: 'DENOISE' },
+  { id: PipelineStep.DENSE, label: '5', name: 'DENSE' },
+  { id: PipelineStep.UPSCALE, label: '6', name: 'UPSCALE' },
+  { id: PipelineStep.EXPORT, label: '7', name: 'EXPORT' },
 ];
 
-const App: React.FC = () => {
-  const networkStatus = useNetworkStatus('http://localhost:5001/api/health', 5000);
-  const { queueLength } = useOperationQueue();
+const DEFAULT_CONFIG: ProcessingConfig = {
+  mode: 'standard',
+  denoiseStrength: 85,
+  highPrecision: true,
+  upscaleFactor: 2,
+  targetSampleRate: 48000,
+  targetChannels: 2,
+  noiseProfile: 'auto',
+};
 
+export default function App() {
   const [step, setStep] = useState<PipelineStep>(PipelineStep.IDLE);
+  const [config, setConfig] = useState<ProcessingConfig>(DEFAULT_CONFIG);
   const [metadata, setMetadata] = useState<AudioMetadata | null>(null);
   const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [logs, setLogs] = useState<string[]>(['VOXIS 4 Dense initialized', 'Trinity 8.1 engine ready']);
   const [isDragging, setIsDragging] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [stagedFile, setStagedFile] = useState<File | null>(null);
-  const [logs, setLogs] = useState<string[]>(['SYS.INIT', 'TRINITY.8.1.READY']);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const [config, setConfig] = useState<ProcessingConfig>({
-    mode: 'standard',
-    denoiseStrength: 85,
-    highPrecision: true,
-    upscaleFactor: 2,
-    targetSampleRate: 48000,
-    targetChannels: 2,
-    noiseProfile: 'auto',
-  });
-
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const { backendOnline } = useNetworkStatus();
+  const backendStatus = backendOnline ? 'online' : 'offline';
+  const isProcessing = step !== PipelineStep.IDLE && step !== PipelineStep.STAGED && step !== PipelineStep.COMPLETE;
 
   const addLog = useCallback((msg: string) => {
-    setLogs(prev => [...prev.slice(-6), msg]);
+    setLogs(prev => [...prev.slice(-20), `[${new Date().toLocaleTimeString()}] ${msg}`]);
   }, []);
 
-  const backendStatus = networkStatus.isBackendReachable ? 'online' :
-                        networkStatus.isOnline ? 'checking' : 'offline';
-
-  useEffect(() => {
-    if (networkStatus.isBackendReachable) {
-      addLog('BACKEND.OK');
-    } else if (!networkStatus.isOnline) {
-      addLog('NETWORK.OFFLINE');
-    }
-  }, [networkStatus.isBackendReachable, networkStatus.isOnline, addLog]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const onTime = () => setCurrentTime(audio.currentTime);
-    const onMeta = () => setDuration(audio.duration);
-    const onEnd = () => setIsPlaying(false);
-    audio.addEventListener('timeupdate', onTime);
-    audio.addEventListener('loadedmetadata', onMeta);
-    audio.addEventListener('ended', onEnd);
-    return () => {
-      audio.removeEventListener('timeupdate', onTime);
-      audio.removeEventListener('loadedmetadata', onMeta);
-      audio.removeEventListener('ended', onEnd);
-    };
-  }, [audioUrl]);
-
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
-  const handleDragLeave = () => setIsDragging(false);
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) stageFile(file);
-  };
-
-  const stageFile = (file: File) => {
-    setStagedFile(file);
-    setStep(PipelineStep.STAGED);
-    setAudioUrl(URL.createObjectURL(file));
-    setMetadata({ name: file.name, size: file.size, duration: 0, sampleRate: 0, channels: 0 });
-    addLog(`STAGED: ${file.name.slice(0, 16).toUpperCase()}`);
-  };
-
-  const startProcessing = async () => {
-    if (!stagedFile) return;
-    if (backendStatus !== 'online') {
-      setError('BACKEND OFFLINE');
+  const handleFileSelect = useCallback((file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const valid = ['wav', 'mp3', 'flac', 'ogg', 'm4a', 'aac', 'wma', 'aiff', 'mp4', 'mov', 'mkv', 'avi', 'webm'];
+    if (!valid.includes(ext)) {
+      addLog(`Rejected: unsupported format .${ext}`);
       return;
     }
+    setSelectedFile(file);
+    setMetadata({ name: file.name, size: file.size, duration: 0, sampleRate: 0, channels: 0, format: ext });
+    setStep(PipelineStep.STAGED);
+    addLog(`Staged: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`);
+  }, [addLog]);
 
-    const file = stagedFile;
-    setError(null);
-    setStep(PipelineStep.UPLOAD);
-    setProgress(0);
-    setDownloadUrl(null);
-    addLog(`MODE: ${config.mode.toUpperCase()}`);
-
+  const handleStart = useCallback(async () => {
+    if (!selectedFile) return;
     try {
-      const upload = await apiService.uploadFile(file, setProgress);
-      if (!upload.success) throw new Error(upload.error);
-      addLog('UPLOAD.OK');
+      setStep(PipelineStep.UPLOAD);
+      setProgress(0);
+      addLog('Uploading file...');
+      const uploadResult = await apiService.uploadFile(selectedFile, (pct) => setProgress(pct));
+      setMetadata(prev => prev ? { ...prev, duration: uploadResult.duration || 0, sampleRate: uploadResult.samplerate || 0, channels: uploadResult.channels || 0 } : prev);
+      addLog(`Uploaded: ${uploadResult.filename}`);
 
       setStep(PipelineStep.INGEST);
       setProgress(0);
-
-      const proc = await apiService.startProcessing(upload.file_id, config);
-      if (!proc.success) throw new Error(proc.error);
-      addLog(`JOB: ${proc.job_id.slice(0, 8)}`);
-
-      await apiService.pollJobStatus(proc.job_id, (status: JobStatus) => {
-        setProgress(status.progress);
-        const stageMap: Record<string, PipelineStep> = {
-          upload: PipelineStep.UPLOAD,
-          ingest: PipelineStep.INGEST,
-          analysis: PipelineStep.ANALYSIS,
-          dense: PipelineStep.DENSE,
-          denoise: PipelineStep.DENOISE,
-          upscale: PipelineStep.UPSCALE,
-          export: PipelineStep.EXPORT,
-        };
-        if (stageMap[status.current_stage]) setStep(stageMap[status.current_stage]);
-        if (status.status === 'complete') {
-          setStep(PipelineStep.COMPLETE);
-          setDownloadUrl(apiService.getDownloadUrl(status.job_id));
-          addLog('COMPLETE');
-        }
-        if (status.status === 'error') {
-          setError(status.error || 'PROCESS ERROR');
-        }
+      addLog(`Processing: mode=${config.mode}, denoise=${config.denoiseStrength}%`);
+      const processResult = await apiService.startProcessing(uploadResult.file_id, {
+        mode: config.mode,
+        denoiseStrength: config.denoiseStrength,
+        highPrecision: config.highPrecision,
+        upscaleFactor: config.upscaleFactor,
+        targetSampleRate: config.targetSampleRate,
+        targetChannels: config.targetChannels,
+        noiseProfile: config.noiseProfile,
       });
+      addLog(`Job started: ${processResult.job_id.slice(0, 8)}`);
+
+      const STAGE_MAP: Record<string, PipelineStep> = {
+        ingest: PipelineStep.INGEST,
+        analysis: PipelineStep.ANALYSIS,
+        denoise: PipelineStep.DENOISE,
+        dense: PipelineStep.DENSE,
+        restore: PipelineStep.RESTORE,
+        upscale: PipelineStep.UPSCALE,
+        export: PipelineStep.EXPORT,
+      };
+
+      await apiService.pollJobStatus(processResult.job_id, (status) => {
+        const stage = status.current_stage?.toLowerCase();
+        if (stage && STAGE_MAP[stage]) setStep(STAGE_MAP[stage]);
+        setProgress(status.progress || 0);
+      });
+
+      setStep(PipelineStep.COMPLETE);
+      setProgress(100);
+      setDownloadUrl(apiService.getDownloadUrl(processResult.job_id));
+      addLog('Restoration complete');
     } catch (err: any) {
-      setError(err.message);
+      addLog(`Error: ${err.message}`);
       setStep(PipelineStep.IDLE);
-      addLog(`ERR: ${err.message.slice(0, 20)}`);
+      setProgress(0);
+    }
+  }, [selectedFile, config, addLog]);
+
+  const handleReset = useCallback(() => {
+    setStep(PipelineStep.IDLE);
+    setProgress(0);
+    setMetadata(null);
+    setDownloadUrl(null);
+    setSelectedFile(null);
+    addLog('Reset — ready for new file');
+  }, [addLog]);
+
+  const handleCancel = useCallback(() => {
+    setStep(PipelineStep.IDLE);
+    setMetadata(null);
+    setSelectedFile(null);
+    addLog('Cancelled');
+  }, [addLog]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
+  const handleDragLeave = useCallback(() => setIsDragging(false), []);
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelect(file);
+  }, [handleFileSelect]);
+
+  const currentStepName = PIPELINE_STEPS.find(s => s.id === step)?.name || '';
+
+  const renderContent = () => {
+    switch (step) {
+      case PipelineStep.IDLE:
+        return <FileDropZone onFileSelect={handleFileSelect} isDragging={isDragging} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} />;
+      case PipelineStep.STAGED:
+        return <StartPanel metadata={metadata} config={config} onStart={handleStart} onCancel={handleCancel} />;
+      case PipelineStep.COMPLETE:
+        return <CompletionPanel config={config} downloadUrl={downloadUrl} onReset={handleReset} />;
+      default:
+        return <ProcessingStatus step={step} stepName={currentStepName} progress={progress} />;
     }
   };
 
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) audioRef.current.pause();
-    else audioRef.current.play();
-    setIsPlaying(!isPlaying);
-  };
-
-  const reset = () => {
-    setStep(PipelineStep.IDLE);
-    setMetadata(null);
-    setDownloadUrl(null);
-    setAudioUrl(null);
-    setProgress(0);
-    setError(null);
-    if (audioRef.current) audioRef.current.pause();
-    setIsPlaying(false);
-    addLog('RESET');
-  };
-
-  const isProcessing = step !== PipelineStep.IDLE && step !== PipelineStep.STAGED && step !== PipelineStep.COMPLETE;
-  const isComplete = step === PipelineStep.COMPLETE;
-  const stepIndex = PIPELINE_STEPS.findIndex(s => s.id === step);
-
   return (
-    <div className="swiss-app">
-      {audioUrl && <audio ref={audioRef} src={audioUrl} />}
+    <div className="h-screen flex flex-col bg-[var(--bg-cream)] text-[var(--charcoal)] font-sans overflow-hidden">
+      <BauhausHeader status={backendStatus} />
+      <OfflineBanner show={!backendOnline} />
 
-      <OfflineBanner
-        isOnline={networkStatus.isOnline}
-        isBackendReachable={networkStatus.isBackendReachable}
-        reconnectAttempts={networkStatus.reconnectAttempts}
-        onRetry={networkStatus.forceReconnect}
-        queueLength={queueLength}
-      />
+      <div className="flex-1 flex overflow-hidden">
+        <div className="w-[300px] flex-shrink-0 hidden md:block">
+          <BauhausSidebar config={config} setConfig={setConfig} logs={logs} isDisabled={isProcessing} />
+        </div>
 
-      <div className="swiss-grid">
-        <SwissHeader status={backendStatus} />
-
-        <SwissSidebar
-          config={config}
-          setConfig={setConfig}
-          logs={logs}
-          isDisabled={isProcessing}
-        />
-
-        <main className="swiss-main">
-          {error && <div className="error-banner">ERROR: {error}</div>}
-
-          <PipelineDisplay currentStep={step} steps={PIPELINE_STEPS} />
-
-          {step === PipelineStep.IDLE && (
-            <FileDropZone
-              onFileSelect={stageFile}
-              isDragging={isDragging}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            />
+        <main className="flex-1 flex flex-col min-w-0 overflow-y-auto relative">
+          {metadata && step !== PipelineStep.IDLE && (
+            <BauhausPlayer metadata={metadata} />
           )}
 
-          {step === PipelineStep.STAGED && (
-            <StartPanel
-              metadata={metadata}
-              config={config}
-              onStart={startProcessing}
-              onCancel={reset}
-            />
+          {step !== PipelineStep.IDLE && step !== PipelineStep.COMPLETE && (
+            <div className="p-4 border-b-3 border-black bg-white">
+              <PipelineDisplay currentStep={step} steps={PIPELINE_STEPS} />
+            </div>
           )}
 
-          {isProcessing && (
-            <ProcessingStatus
-              step={step}
-              stepName={PIPELINE_STEPS[stepIndex]?.name || 'PROCESSING'}
-              progress={progress}
-            />
-          )}
-
-          {isComplete && (
-            <CompletionPanel
-              config={config}
-              downloadUrl={downloadUrl}
-              onReset={reset}
-            />
-          )}
-
-          {audioUrl && !isComplete && step === PipelineStep.STAGED && (
-            <SwissPlayer
-              isPlaying={isPlaying}
-              togglePlay={togglePlay}
-              metadata={metadata}
-              currentTime={currentTime}
-              duration={duration}
-            />
-          )}
+          <div className="flex-1 flex items-center justify-center p-8">
+            {renderContent()}
+          </div>
         </main>
-
-        <SwissFooter logs={logs} />
       </div>
 
-      <style>{`
-        .swiss-app {
-          font-family: 'Inter', system-ui, sans-serif;
-          background: #fff; min-height: 100vh;
-          color: #000;
-        }
-        .swiss-grid {
-          display: grid;
-          grid-template-columns: 260px 1fr;
-          grid-template-rows: auto 1fr auto;
-          min-height: 100vh;
-          border: 3px solid #000;
-        }
-        @media (max-width: 768px) {
-          .swiss-grid {
-            grid-template-columns: 1fr;
-            grid-template-rows: auto auto 1fr auto;
-            border-width: 0;
-          }
-          .swiss-app { overflow-x: hidden; }
-        }
-        .swiss-main {
-          display: flex; flex-direction: column; background: #f7f7f7;
-          position: relative; z-index: 1;
-        }
-        .error-banner {
-          background: #ff3300; color: #fff; padding: 10px 24px;
-          font-weight: 700; text-align: center;
-          text-transform: uppercase; letter-spacing: 2px; font-size: 12px;
-        }
-      `}</style>
+      <BauhausFooter leftText="VOXIS 4 DENSE // TRINITY 8.1" />
     </div>
   );
-};
-
-export default App;
+}

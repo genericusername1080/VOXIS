@@ -1,63 +1,107 @@
 /**
- * VOXIS 4 Dense — API Service
+ * VOXIS API Service v4.0.0
  * Powered by Trinity 8.1 | Built by Glass Stone
+ *
+ * Features:
+ * - Exponential backoff retry
+ * - Circuit breaker
+ * - Request timeout handling
+ * - v4.0.0: Recording upload, video file support, multi-format export
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
-// Sleep utility
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Fetch with timeout
-async function fetchWithTimeout(
-  url: string,
-  options: RequestInit = {},
-  timeoutMs: number = 30000
-): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    return res;
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error(`Request timeout after ${timeoutMs}ms`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(id);
-  }
+interface RetryConfig {
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  retryOn?: (error: Error) => boolean;
 }
 
-// Retry with exponential backoff
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 500
-): Promise<T> {
-  let lastErr: Error = new Error('Unknown');
-  for (let i = 0; i <= maxRetries; i++) {
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  baseDelayMs: 500,
+  maxDelayMs: 5000,
+  retryOn: (error) => {
+    const msg = error.message.toLowerCase();
+    return msg.includes('network') || msg.includes('fetch') || msg.includes('503') || msg.includes('502');
+  }
+};
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function withRetry<T>(fn: () => Promise<T>, config: Partial<RetryConfig> = {}): Promise<T> {
+  const { maxRetries, baseDelayMs, maxDelayMs, retryOn } = { ...DEFAULT_RETRY_CONFIG, ...config };
+  let lastError: Error = new Error('Unknown error');
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
-    } catch (err) {
-      lastErr = err instanceof Error ? err : new Error(String(err));
-      if (i < maxRetries) {
-        const delay = Math.min(baseDelay * Math.pow(2, i) + Math.random() * 100, 5000);
-        console.warn(`[VOXIS] Retry ${i + 1}/${maxRetries} after ${Math.round(delay)}ms`);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const shouldRetry = attempt < maxRetries && (!retryOn || retryOn(lastError));
+      if (shouldRetry) {
+        const delay = Math.min(baseDelayMs * Math.pow(2, attempt) + Math.random() * 100, maxDelayMs);
         await sleep(delay);
       }
     }
   }
-  throw lastErr;
+  throw lastError;
 }
 
-// Type definitions
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 30000): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+class CircuitBreaker {
+  private failures = 0;
+  private lastFailure: number = 0;
+  private state: 'closed' | 'open' | 'half-open' = 'closed';
+
+  constructor(private threshold: number = 5, private resetTimeMs: number = 30000) { }
+
+  async execute<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.state === 'open' && Date.now() - this.lastFailure > this.resetTimeMs) {
+      this.state = 'half-open';
+    }
+    if (this.state === 'open') {
+      throw new Error('Circuit breaker is open - service unavailable');
+    }
+    try {
+      const result = await fn();
+      this.failures = 0;
+      this.state = 'closed';
+      return result;
+    } catch (error) {
+      this.failures++;
+      this.lastFailure = Date.now();
+      if (this.failures >= this.threshold) this.state = 'open';
+      throw error;
+    }
+  }
+
+  getState() { return this.state; }
+}
+
 export interface UploadResponse {
   success: boolean;
   file_id: string;
   filename: string;
-  filepath: string;
   size: number;
+  duration: number;
+  channels: number;
+  samplerate: number;
+  source?: 'audio' | 'video' | 'recording';
   uploaded_at: string;
   error?: string;
 }
@@ -76,34 +120,11 @@ export interface JobStatus {
   current_stage: string;
   progress: number;
   stages: Record<string, { progress: number; updated_at: string }>;
-  config: Record<string, any>;
   error: string | null;
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
-  results?: ProcessingResults;
-}
-
-export interface ProcessingResults {
-  input_file: string;
-  output_file: string;
-  success: boolean;
-  input_metadata?: {
-    sample_rate: number;
-    channels: number;
-    duration: number;
-    samples: number;
-  };
-  output_metadata?: {
-    sample_rate: number;
-    channels: number;
-    duration: number;
-    samples: number;
-    bit_depth: number;
-    format: string;
-  };
-  stages: Record<string, any>;
-  error?: string;
+  results?: any;
 }
 
 export interface HealthResponse {
@@ -113,91 +134,72 @@ export interface HealthResponse {
   powered_by: string;
   built_by: string;
   timestamp: string;
-  models_ready?: boolean;
-  models_downloading?: boolean;
+}
+
+export interface ModelsStatus {
+  models_ready: boolean;
+  models: Record<string, ModelInfo>;
+  total_size_mb: number;
 }
 
 export interface ModelInfo {
   name: string;
-  engine: string;
-  description: string;
-  status: 'not_downloaded' | 'downloading' | 'ready' | 'error';
-  progress: number;
-  error: string | null;
+  status: string;
   size_mb: number;
+  path: string;
 }
-
-export interface ModelsStatus {
-  models: Record<string, ModelInfo>;
-  all_ready: boolean;
-  any_downloading: boolean;
-  total_size_mb: number;
-  model_dir: string;
-  online: boolean;
-}
-
-// =============================================================================
-// API SERVICE
-// =============================================================================
 
 class ApiService {
   private baseUrl: string;
+  private circuitBreaker: CircuitBreaker;
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
+    this.circuitBreaker = new CircuitBreaker(5, 30000);
   }
 
-  // Health check
   async healthCheck(): Promise<HealthResponse> {
-    return withRetry(async () => {
-      const res = await fetchWithTimeout(`${this.baseUrl}/api/health`, {}, 5000);
-      if (!res.ok) throw new Error(`Health check failed: ${res.status}`);
-      return res.json();
-    });
+    return this.circuitBreaker.execute(() =>
+      withRetry(async () => {
+        const response = await fetchWithTimeout(`${this.baseUrl}/api/health`, {}, 5000);
+        if (!response.ok) throw new Error(`Health check failed: ${response.status}`);
+        return response.json();
+      })
+    );
   }
 
-  // Upload file
   async uploadFile(file: File, onProgress?: (percent: number) => void): Promise<UploadResponse> {
-    return withRetry(async () => {
-      return new Promise((resolve, reject) => {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const xhr = new XMLHttpRequest();
-        xhr.timeout = 300000;
-        xhr.ontimeout = () => reject(new Error('Upload timeout'));
-
-        xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable && onProgress) {
-            onProgress(Math.round((e.loaded / e.total) * 100));
-          }
-        });
-
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(JSON.parse(xhr.responseText));
-          } else {
-            try {
-              const err = JSON.parse(xhr.responseText);
-              reject(new Error(err.error || `Upload failed: ${xhr.status}`));
-            } catch {
-              reject(new Error(`Upload failed: ${xhr.status}`));
+    return this.circuitBreaker.execute(() =>
+      withRetry(async () => {
+        return new Promise((resolve, reject) => {
+          const formData = new FormData();
+          formData.append('file', file);
+          const xhr = new XMLHttpRequest();
+          xhr.timeout = 300000;
+          xhr.ontimeout = () => reject(new Error('Upload timeout'));
+          xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+          });
+          xhr.addEventListener('load', () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(JSON.parse(xhr.responseText));
+            } else {
+              try { reject(new Error(JSON.parse(xhr.responseText).error || `Upload failed: ${xhr.status}`)); }
+              catch { reject(new Error(`Upload failed: ${xhr.status}`)); }
             }
-          }
+          });
+          xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+          xhr.open('POST', `${this.baseUrl}/api/upload`);
+          xhr.send(formData);
         });
-
-        xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
-        xhr.open('POST', `${this.baseUrl}/api/upload`);
-        xhr.send(formData);
-      });
-    }, 2);
+      }, { maxRetries: 2 })
+    );
   }
 
-  // Start processing with mode support
   async startProcessing(
     fileId: string,
     config: {
-      mode: 'standard' | 'extreme';
+      mode: 'quick' | 'standard' | 'extreme';
       denoiseStrength: number;
       highPrecision: boolean;
       upscaleFactor: number;
@@ -206,149 +208,85 @@ class ApiService {
       noiseProfile?: 'auto' | 'aggressive' | 'gentle';
     }
   ): Promise<ProcessResponse> {
-    return withRetry(async () => {
-      const res = await fetchWithTimeout(`${this.baseUrl}/api/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          file_id: fileId,
-          mode: config.mode,
-          denoise_strength: config.denoiseStrength,
-          high_precision: config.highPrecision,
-          upscale_factor: config.upscaleFactor,
-          target_sample_rate: config.targetSampleRate,
-          target_channels: config.targetChannels || 2,
-          noise_profile: config.noiseProfile || 'auto',
-        }),
-      }, 10000);
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to start processing');
-      return data;
-    });
+    return this.circuitBreaker.execute(() =>
+      withRetry(async () => {
+        const response = await fetchWithTimeout(`${this.baseUrl}/api/process`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file_id: fileId,
+            mode: config.mode,
+            denoise_strength: config.denoiseStrength,
+            high_precision: config.highPrecision,
+            upscale_factor: config.upscaleFactor,
+            target_sample_rate: config.targetSampleRate,
+            target_channels: config.targetChannels || 2,
+            noise_profile: config.noiseProfile || 'auto',
+          }),
+        }, 10000);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to start processing');
+        return data;
+      })
+    );
   }
 
-  // Get job status
   async getJobStatus(jobId: string): Promise<JobStatus> {
     return withRetry(async () => {
-      const res = await fetchWithTimeout(`${this.baseUrl}/api/status/${jobId}`, {}, 5000);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to get status');
+      const response = await fetchWithTimeout(`${this.baseUrl}/api/status/${jobId}`, {}, 5000);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to get job status');
       return data;
-    }, 2);
+    }, { maxRetries: 2 });
   }
 
-  // Poll job status
-  async pollJobStatus(
-    jobId: string,
-    onUpdate: (status: JobStatus) => void,
-    intervalMs: number = 500
-  ): Promise<JobStatus> {
-    let errors = 0;
-    const maxErrors = 5;
-
+  async pollJobStatus(jobId: string, onUpdate: (status: JobStatus) => void, intervalMs: number = 500): Promise<JobStatus> {
+    let consecutiveErrors = 0;
     return new Promise((resolve, reject) => {
       const poll = async () => {
         try {
           const status = await this.getJobStatus(jobId);
-          errors = 0;
+          consecutiveErrors = 0;
           onUpdate(status);
-
-          if (status.status === 'complete') {
-            resolve(status);
-          } else if (status.status === 'error') {
-            reject(new Error(status.error || 'Processing failed'));
-          } else {
-            setTimeout(poll, intervalMs);
-          }
-        } catch (err) {
-          errors++;
-          if (errors >= maxErrors) {
-            reject(new Error('Lost connection to backend'));
-          } else {
-            setTimeout(poll, Math.min(intervalMs * Math.pow(2, errors), 5000));
-          }
+          if (status.status === 'complete') resolve(status);
+          else if (status.status === 'error') reject(new Error(status.error || 'Processing failed'));
+          else setTimeout(poll, intervalMs);
+        } catch (error) {
+          consecutiveErrors++;
+          if (consecutiveErrors >= 5) reject(new Error('Lost connection to backend'));
+          else setTimeout(poll, Math.min(intervalMs * Math.pow(2, consecutiveErrors), 5000));
         }
       };
       poll();
     });
   }
 
-  // Download URL
   getDownloadUrl(jobId: string): string {
     return `${this.baseUrl}/api/download/${jobId}`;
   }
 
-  // Download file
-  async downloadFile(jobId: string): Promise<Blob> {
-    return withRetry(async () => {
-      const res = await fetchWithTimeout(this.getDownloadUrl(jobId), {}, 60000);
-      if (!res.ok) throw new Error('Download failed');
-      return res.blob();
-    });
+  getExportUrl(jobId: string, format: string = 'wav', quality: string = 'high'): string {
+    return `${this.baseUrl}/api/download/${jobId}?format=${format}&quality=${quality}`;
   }
 
-  // === MODEL MANAGEMENT ===
-
-  // Get all model statuses
   async getModelsStatus(): Promise<ModelsStatus> {
-    const res = await fetchWithTimeout(`${this.baseUrl}/api/models`, {}, 5000);
-    if (!res.ok) throw new Error('Failed to get model status');
-    return res.json();
+    const response = await fetchWithTimeout(`${this.baseUrl}/api/models`, {}, 5000);
+    return response.json();
   }
 
-  // Start downloading models (all or single)
-  async downloadModels(modelId?: string): Promise<{ success: boolean; downloading: boolean }> {
-    const res = await fetchWithTimeout(`${this.baseUrl}/api/models/download`, {
+  async downloadModel(modelKey: string): Promise<{ success: boolean; error?: string }> {
+    const response = await fetchWithTimeout(`${this.baseUrl}/api/models/download`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(modelId ? { model_id: modelId } : {}),
-    }, 10000);
-    return res.json();
+      body: JSON.stringify({ model: modelKey }),
+    }, 600000);
+    return response.json();
   }
 
-  // Cancel model download
-  async cancelModelDownload(): Promise<{ success: boolean }> {
-    const res = await fetchWithTimeout(`${this.baseUrl}/api/models/cancel`, {
-      method: 'POST',
-    }, 5000);
-    return res.json();
-  }
-
-  // Poll model download status
-  async pollModelsStatus(
-    onUpdate: (status: ModelsStatus) => void,
-    intervalMs: number = 1000
-  ): Promise<ModelsStatus> {
-    return new Promise((resolve, reject) => {
-      let errors = 0;
-      const poll = async () => {
-        try {
-          const status = await this.getModelsStatus();
-          errors = 0;
-          onUpdate(status);
-          if (status.all_ready) {
-            resolve(status);
-          } else if (status.any_downloading) {
-            setTimeout(poll, intervalMs);
-          } else {
-            // Not all ready but nothing downloading — some failed
-            resolve(status);
-          }
-        } catch (err) {
-          errors++;
-          if (errors >= 5) {
-            reject(new Error('Lost connection during model download'));
-          } else {
-            setTimeout(poll, intervalMs * 2);
-          }
-        }
-      };
-      poll();
-    });
+  getConnectionStatus(): { online: boolean; circuitState: string } {
+    return { online: true, circuitState: this.circuitBreaker.getState() };
   }
 }
 
-// Export singleton
 export const apiService = new ApiService();
 export default apiService;
