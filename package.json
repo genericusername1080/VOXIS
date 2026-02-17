@@ -1,8 +1,8 @@
 {
-  "name": "voxis",
-  "productName": "VOXIS",
-  "version": "1.0.5",
-  "description": "Professional Audio Restoration - Powered by Trinity",
+  "name": "voxis-dense",
+  "productName": "VOXIS Dense",
+  "version": "3.2.0",
+  "description": "VOXIS 3.2 Dense - Professional Audio Restoration - Powered by Trinity v7",
   "author": "Glass Stone",
   "license": "MIT",
   "private": true,
@@ -19,13 +19,10 @@
     "electron:build:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
-    "@heroicons/react": "^2.2.0",
-    "d3": "^7.9.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },
   "devDependencies": {
-    "@types/d3": "^7.4.3",
     "@types/node": "^22.14.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

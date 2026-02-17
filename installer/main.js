@@ -1,12 +1,6 @@
 /**
- * VOXIS Desktop Application - Main Process
- * Powered by Trinity | Built by Glass Stone
- * 
- * Manages:
- * - Application window lifecycle
- * - Python backend process
- * - System tray integration
- * - Auto-updates (future)
+ * VOXIS 3.2 Dense — Electron Main Process
+ * Powered by Trinity v7 | Built by Glass Stone
  */
 
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
@@ -15,26 +9,22 @@ const { spawn, exec } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 
-// Configuration
+// Config
 const isDev = !app.isPackaged;
 const BACKEND_PORT = 5001;
 const FRONTEND_PORT = 5173;
 
-// Process references
+// Process refs
 let mainWindow = null;
 let backendProcess = null;
 let splashWindow = null;
 
-// Paths
-function getResourcePath(relativePath) {
-  if (isDev) {
-    return path.join(__dirname, '..', relativePath);
-  }
-  return path.join(process.resourcesPath, relativePath);
+function getResourcePath(rel) {
+  return isDev ? path.join(__dirname, '..', rel) : path.join(process.resourcesPath, rel);
 }
 
 // =============================================================================
-// SPLASH SCREEN
+// SPLASH
 // =============================================================================
 
 function createSplashWindow() {
@@ -44,12 +34,8 @@ function createSplashWindow() {
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
+    webPreferences: { nodeIntegration: true, contextIsolation: false }
   });
-
   splashWindow.loadFile(path.join(__dirname, 'splash.html'));
   splashWindow.center();
 }
@@ -75,33 +61,23 @@ function createMainWindow() {
     }
   });
 
-  // Load frontend
   if (isDev) {
     mainWindow.loadURL(`http://localhost:${FRONTEND_PORT}`);
     mainWindow.webContents.openDevTools();
   } else {
-    // In production, 'dist' is copied to 'resources/dist'
-    // We are in 'resources/app.asar/main.js' or 'resources/main.js' depending on packaging
-    // The reliable way is using process.resourcesPath
     const indexPath = path.join(process.resourcesPath, 'dist', 'index.html');
-    console.log('[VOXIS] Loading frontend from:', indexPath);
+    console.log('[VOXIS Dense] Loading frontend:', indexPath);
     mainWindow.loadFile(indexPath);
   }
 
   mainWindow.once('ready-to-show', () => {
-    if (splashWindow) {
-      splashWindow.close();
-      splashWindow = null;
-    }
+    if (splashWindow) { splashWindow.close(); splashWindow = null; }
     mainWindow.show();
     mainWindow.focus();
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+  mainWindow.on('closed', () => { mainWindow = null; });
 
-  // Handle external links
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
@@ -109,105 +85,69 @@ function createMainWindow() {
 }
 
 // =============================================================================
-// BACKEND MANAGEMENT
+// BACKEND
 // =============================================================================
 
 async function startBackend() {
   return new Promise((resolve, reject) => {
-    console.log('[VOXIS] Starting backend...');
-    
+    console.log('[VOXIS Dense] Starting backend...');
     const backendPath = getResourcePath('backend');
     const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-    
-    // Check if we're in dev mode or packaged
+
     let startCmd, startArgs, startOptions;
-    
+
     if (isDev) {
-      // Development: Use existing venv
       const venvPython = path.join(backendPath, 'venv', 'bin', 'python');
-      const serverPath = path.join(backendPath, 'server.py');
-      
       startCmd = fs.existsSync(venvPython) ? venvPython : pythonCmd;
-      startArgs = [serverPath];
-      startOptions = { cwd: backendPath, env: { ...process.env, VOXIS_PORT: BACKEND_PORT } };
+      startArgs = [path.join(backendPath, 'server.py')];
       startOptions = { cwd: backendPath, env: { ...process.env, VOXIS_PORT: BACKEND_PORT } };
     } else {
-      // Production: Use bundled executable
-      const backendDistPath = getResourcePath(path.join('backend', 'dist', 'voxis_backend'));
+      const distPath = getResourcePath(path.join('backend', 'dist', 'voxis_backend'));
       const execName = process.platform === 'win32' ? 'voxis_backend.exe' : 'voxis_backend';
-      const execPath = path.join(backendDistPath, execName);
+      const execPath = path.join(distPath, execName);
 
       if (fs.existsSync(execPath)) {
-        console.log('[VOXIS] Found bundled backend executable:', execPath);
+        console.log('[VOXIS Dense] Found bundled backend:', execPath);
         startCmd = execPath;
         startArgs = [];
-        startOptions = { cwd: backendDistPath, env: { ...process.env, VOXIS_PORT: BACKEND_PORT, VOXIS_ROOT_PATH: backendDistPath } };
+        startOptions = { cwd: distPath, env: { ...process.env, VOXIS_PORT: BACKEND_PORT, VOXIS_ROOT_PATH: distPath } };
       } else {
-        // Fallback to python script if executable not found (or legacy build)
-        console.log('[VOXIS] Bundled executable not found, falling back to python script');
+        console.log('[VOXIS Dense] Fallback to python script');
         startCmd = pythonCmd;
         startArgs = [path.join(backendPath, 'server.py')];
         startOptions = { cwd: backendPath, env: { ...process.env, VOXIS_PORT: BACKEND_PORT } };
       }
     }
-    
-    console.log(`[VOXIS] Spawning backend: ${startCmd} ${startArgs.join(' ')}`);
+
+    console.log(`[VOXIS Dense] Spawning: ${startCmd} ${startArgs.join(' ')}`);
     backendProcess = spawn(startCmd, startArgs, startOptions);
-    
-    backendProcess.stdout.on('data', (data) => {
-      console.log(`[Backend] ${data}`);
-    });
-    
-    backendProcess.stderr.on('data', (data) => {
-      console.error(`[Backend Error] ${data}`);
-    });
-    
-    backendProcess.on('error', (err) => {
-      console.error('[VOXIS] Failed to start backend:', err);
-      reject(err);
-    });
-    
-    backendProcess.on('exit', (code) => {
-      console.log(`[VOXIS] Backend exited with code ${code}`);
-      backendProcess = null;
-    });
-    
-    // Wait for backend to be ready
-    waitForBackend(60000)
-      .then(resolve)
-      .catch(reject);
+
+    backendProcess.stdout.on('data', (d) => console.log(`[Backend] ${d}`));
+    backendProcess.stderr.on('data', (d) => console.error(`[Backend] ${d}`));
+    backendProcess.on('error', (err) => { console.error('[VOXIS Dense] Backend error:', err); reject(err); });
+    backendProcess.on('exit', (code) => { console.log(`[VOXIS Dense] Backend exited: ${code}`); backendProcess = null; });
+
+    waitForBackend(60000).then(resolve).catch(reject);
   });
 }
 
 function waitForBackend(timeoutMs) {
-  const startTime = Date.now();
-  
+  const start = Date.now();
   return new Promise((resolve, reject) => {
     const check = () => {
-      if (Date.now() - startTime > timeoutMs) {
-        reject(new Error('Backend startup timeout'));
-        return;
-      }
-      
+      if (Date.now() - start > timeoutMs) { reject(new Error('Backend startup timeout')); return; }
       http.get(`http://localhost:${BACKEND_PORT}/api/health`, (res) => {
-        if (res.statusCode === 200) {
-          console.log('[VOXIS] Backend is ready');
-          resolve();
-        } else {
-          setTimeout(check, 500);
-        }
-      }).on('error', () => {
-        setTimeout(check, 500);
-      });
+        if (res.statusCode === 200) { console.log('[VOXIS Dense] Backend ready'); resolve(); }
+        else setTimeout(check, 500);
+      }).on('error', () => setTimeout(check, 500));
     };
-    
-    setTimeout(check, 1000); // Initial delay
+    setTimeout(check, 1000);
   });
 }
 
 function stopBackend() {
   if (backendProcess) {
-    console.log('[VOXIS] Stopping backend...');
+    console.log('[VOXIS Dense] Stopping backend...');
     if (process.platform === 'win32') {
       exec(`taskkill /pid ${backendProcess.pid} /T /F`);
     } else {
@@ -218,17 +158,14 @@ function stopBackend() {
 }
 
 // =============================================================================
-// IPC HANDLERS
+// IPC
 // =============================================================================
 
 ipcMain.handle('get-backend-status', async () => {
   try {
-    const response = await fetch(`http://localhost:${BACKEND_PORT}/api/health`);
-    const data = await response.json();
-    return { online: true, data };
-  } catch {
-    return { online: false };
-  }
+    const res = await fetch(`http://localhost:${BACKEND_PORT}/api/health`);
+    return { online: true, data: await res.json() };
+  } catch { return { online: false }; }
 });
 
 ipcMain.handle('restart-backend', async () => {
@@ -238,51 +175,44 @@ ipcMain.handle('restart-backend', async () => {
 });
 
 ipcMain.handle('get-app-info', () => ({
+  name: 'VOXIS 3.2 Dense',
   version: app.getVersion(),
   platform: process.platform,
   isDev
 }));
 
 // =============================================================================
-// APP LIFECYCLE
+// LIFECYCLE
 // =============================================================================
 
 app.whenReady().then(async () => {
   createSplashWindow();
-  
   try {
     await startBackend();
     createMainWindow();
   } catch (err) {
-    console.error('[VOXIS] Startup failed:', err);
-    dialog.showErrorBox('VOXIS Startup Error', 
+    console.error('[VOXIS Dense] Startup failed:', err);
+    dialog.showErrorBox('VOXIS Dense — Startup Error',
       'Failed to start the audio processing backend.\n\n' +
       'Please ensure Python 3.9+ and FFmpeg are installed.\n\n' +
       `Error: ${err.message}`
     );
     if (splashWindow) splashWindow.close();
   }
-  
+
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
-    }
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });
 });
 
 app.on('window-all-closed', () => {
   stopBackend();
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => {
-  stopBackend();
-});
+app.on('before-quit', () => stopBackend());
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
-  console.error('[VOXIS] Uncaught exception:', err);
+  console.error('[VOXIS Dense] Uncaught exception:', err);
   stopBackend();
 });

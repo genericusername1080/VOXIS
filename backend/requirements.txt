@@ -1,5 +1,5 @@
-# VOXIS Backend Requirements
-# Powered by Trinity | Built by Glass Stone 2026 -R/D V1A
+# VOXIS 3.2 Dense — Backend Requirements
+# Powered by Trinity v7 | Built by Glass Stone
 
 # Web Framework
 flask>=3.0.0
@@ -8,25 +8,25 @@ python-dotenv>=1.0.0
 gunicorn>=21.2.0
 
 # Audio Processing Core
-numpy>=1.22,<1.24
+numpy>=1.22
 scipy>=1.11.0
 soundfile>=0.12.1
 librosa>=0.10.0
 pydub>=0.25.1
 resampy>=0.4.2
 
-# Noise Reduction (Yazdi9/Audio-Noise-Reduction)
+# Noise Reduction
 noisereduce>=3.0.0
 
 # Deep Filtering (Rikorose/DeepFilterNet)
 deepfilternet>=0.5.6
 
-# PyTorch (CPU by default, for GPU see setup.sh)
+# UVR5 Source Separation (Anjok07/ultimatevocalremovergui)
+audio-separator[cpu]>=0.17.0
+
+# PyTorch (CPU default — GPU: see setup.sh)
 torch>=2.0.0
 torchaudio>=2.0.0
 
 # Utilities
 werkzeug>=3.0.0
-pyinstaller>=6.0.0
-pywin32>=306; sys_platform == 'win32'
-pypiwin32>=223; sys_platform == 'win32'

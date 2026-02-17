@@ -1,37 +1,42 @@
-# VOXIS Audio Restoration System
-**Version 1.0.5** | **Powered by Trinity** | **Built by Glass Stone**  
+# VOXIS 3.2 Dense
+**Powered by Trinity v7** | **Built by Glass Stone**
 **Gabriel Rodriguez, CEO 2026**
 
 ---
 
-## 🎧 What is VOXIS?
+## What is VOXIS 3.2 Dense?
 
-VOXIS is a professional audio restoration application with Swiss Design aesthetics. It combines AI-powered denoising, neural upscaling, and spectral analysis into a seamless workflow.
+VOXIS 3.2 Dense is a professional audio restoration application built with Swiss Design principles. It combines the Dense Source Separator (UVR5), Dense Neural Filter (DeepFilterNet), and Dense Diffusion Upscaler (AudioSR) into a 7-step pipeline for broadcast-quality results.
 
-### Deployment Options
+### Pipeline
 
-| Option | Best For | Get Started |
-|--------|----------|-------------|
-| **Desktop App** | Local processing, offline use | [Download Installer](#-desktop-installer) |
-| **Web/Cloud** | Browser access, GPU acceleration | [Deploy to Cloud](#-cloud-deployment) |
-| **Local Dev** | Development, testing | [Run Locally](#-quick-start) |
+```
+UPLOAD → INGEST → ANALYSIS → DENSE (UVR5) → DENOISE → UPSCALE → EXPORT
+```
+
+### Processing Modes
+
+| Mode | Description |
+|------|-------------|
+| **Standard** | Diffusion-based restoration — DeepFilterNet + AudioSR (default) |
+| **Extreme** | Full UVR5 separation + maximum noise reduction + aggressive upscale |
 
 ---
 
-## 💾 Desktop Installer
+## Desktop Installer
 
 Download the native app for your platform:
 
 ### macOS
 | File | Architecture |
 |------|--------------|
-| `VOXIS-1.0.5-arm64.dmg` | Apple Silicon (M1/M2/M3) |
-| `VOXIS-1.0.5.dmg` | Intel Mac |
+| `VOXIS-Dense-3.2.0-arm64.dmg` | Apple Silicon (M1/M2/M3/M4) |
+| `VOXIS-Dense-3.2.0.dmg` | Intel Mac |
 
 ### Windows
 | File | Architecture |
 |------|--------------|
-| `VOXIS-Setup-1.0.5.exe` | Windows 10/11 (x64) |
+| `VOXIS-Dense-Setup-3.2.0.exe` | Windows 10/11 (x64) |
 
 > **First Launch (macOS)**: Right-click → Open to bypass Gatekeeper
 
@@ -39,30 +44,39 @@ For build instructions, see [Installer Guide](docs/INSTALLER_GUIDE.md).
 
 ---
 
-## ☁️ Cloud Deployment
+## Cloud Deployment
 
-Deploy VOXIS as a web application with GPU acceleration:
+Deploy VOXIS Dense as a web application with GPU acceleration:
 
 ```bash
 ./deploy-web.sh up prod
 ```
 
-Features:
-- 🖥️ Nginx reverse proxy (port 80/443)
-- 🐍 Flask backend with Gunicorn
-- ⚡ Optional NVIDIA GPU support
-- 📦 Docker containerized
-
 See [Cloud README](cloud/README.md) for full setup.
 
 ---
 
-## 🚀 Quick Start (Local Development)
+## Quick Start (Local Development)
 
 ### Prerequisites
 - Node.js 18+
 - Python 3.9+
 - FFmpeg
+
+### Install & Run
+
+```bash
+# Frontend
+npm install
+npm run dev
+
+# Backend
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python server.py
+```
 
 ### One-Command Start
 ```bash
@@ -77,49 +91,66 @@ See [Cloud README](cloud/README.md) for full setup.
 
 ---
 
-## ✨ Trinity Engine
+## Trinity v7 Engine
 
-| Feature | Technology | Description |
-|---------|------------|-------------|
-| **Denoise** | DeepFilterNet | AI noise reduction with 3 profiles |
-| **Upscale** | AudioSR | Neural super-resolution (2×/4×) |
-| **Export** | FFmpeg | WAV, FLAC, MP3 at broadcast quality |
+| Model | Engine | Description |
+|-------|--------|-------------|
+| **Dense Spectrum Analyzer** | noisereduce | Spectral noise profiling |
+| **Dense Source Separator** | UVR5 / audio-separator | Source separation and vocal isolation |
+| **Dense Neural Filter** | DeepFilterNet | AI noise reduction (HIGH mode, unlimited attenuation) |
+| **Dense Diffusion Upscaler** | AudioSR | Neural super-resolution (48kHz, 2ch, 24-bit) |
+| **Dense Audio Encoder** | FFmpeg | WAV, FLAC, MP3 320kbps |
 
-### Noise Profiles
-- **Auto**: Intelligent analysis, balanced results
-- **Aggressive**: Maximum noise removal
-- **Gentle**: Preserves subtle audio details
+### Output Specs
+- Sample rate: 48,000 Hz
+- Channels: 2 (stereo)
+- Bit depth: 24-bit PCM
+- Formats: WAV, FLAC, MP3
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [Trinity Technical Docs](docs/TRINITY_TECHNICAL.md) | ML pipeline architecture |
-| [User Guide](docs/USER_GUIDE.md) | How to use the app |
+| [Trinity v7 Technical PDF](docs/Trinity_V7_Technical_Documentation.pdf) | Full ML pipeline architecture and specs |
+| [Trinity Technical (MD)](docs/TRINITY_TECHNICAL.md) | Technical reference (markdown) |
 | [Installer Guide](docs/INSTALLER_GUIDE.md) | Desktop app installation |
-| [Deployment](docs/DEPLOYMENT.md) | Docker, Cloud, Environment |
-| [Architecture](docs/ARCHITECTURE.md) | System design |
 | [API Reference](docs/API_REFERENCE.md) | REST endpoints |
 
 ---
 
-## 🛠 Project Structure
+## Project Structure
 
 ```
 VOXIS/
-├── backend/          # Flask API + Python processing
-├── components/       # React UI components
-├── services/         # TypeScript API services
-├── installer/        # Electron desktop app
-├── cloud/            # GPU cloud deployment
+├── backend/          # Flask API + Python audio pipeline
+│   ├── server.py     # REST API server
+│   ├── pipeline.py   # Audio processing pipeline
+│   └── config.py     # Backend configuration
+├── components/       # React UI components (Swiss Design)
+├── services/         # TypeScript API service
+├── installer/        # Electron desktop app (macOS/Windows/Linux)
+├── cloud/            # GPU cloud deployment (Docker)
 ├── docs/             # Documentation
+├── App.tsx           # Main React application
+├── types.ts          # TypeScript type definitions
+├── index.html        # Entry point
 └── run-local.sh      # Development startup
 ```
 
 ---
 
-## 📄 License
+## Tech Stack
 
-MIT © Glass Stone 2026
+- **Frontend**: React 19, TypeScript, Vite 6
+- **Backend**: Python 3.9+, Flask, PyTorch
+- **Desktop**: Electron 39, electron-builder
+- **Design**: Swiss Design System (Inter + JetBrains Mono)
+- **AI/ML**: Dense Neural Filter (DeepFilterNet), Dense Diffusion Upscaler (AudioSR), Dense Source Separator (UVR5)
+
+---
+
+## License
+
+MIT (c) Glass Stone 2026

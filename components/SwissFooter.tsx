@@ -5,6 +5,7 @@ interface SwissFooterProps {
 }
 
 export const SwissFooter: React.FC<SwissFooterProps> = ({ logs }) => {
+  const year = new Date().getFullYear();
   return (
     <footer className="swiss-footer">
       <div className="log">
@@ -13,26 +14,32 @@ export const SwissFooter: React.FC<SwissFooterProps> = ({ logs }) => {
         ))}
       </div>
       <div className="footer-brand">
-        VOXIS v2.0 • DeepFilterNet • AudioSR • Yazdi9
+        VOXIS 3.2 Dense &copy; {year} Glass Stone
       </div>
-      
+
       <style>{`
         .swiss-footer {
           grid-column: 1 / -1;
-          background: #000;
-          color: #fff;
-          padding: 16px 32px;
-          border-top: 4px solid #000;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
+          background: #000; color: #fff;
+          padding: 10px 28px;
+          border-top: 3px solid #000;
+          display: flex; justify-content: space-between; align-items: center;
         }
         .log {
-          display: flex; gap: 24px;
-          font-family: 'JetBrains Mono', monospace; font-size: 10px;
+          display: flex; gap: 16px;
+          font-family: 'JetBrains Mono', monospace; font-size: 9px;
         }
         .log-entry { color: #ff3300; }
-        .footer-brand { font-size: 10px; opacity: 0.5; }
+        .footer-brand {
+          font-size: 9px; opacity: 0.4;
+          font-family: 'JetBrains Mono', monospace;
+        }
+        @media (max-width: 768px) {
+          .swiss-footer {
+            flex-direction: column; gap: 8px; text-align: center;
+            padding: 12px 16px;
+          }
+        }
       `}</style>
     </footer>
   );

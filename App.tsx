@@ -1,9 +1,13 @@
+/**
+ * VOXIS 3.2 Dense
+ * Powered by Trinity v7 | Built by Glass Stone
+ * Copyright (c) 2026 Glass Stone. All rights reserved.
+ */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { PipelineStep, AudioMetadata, ProcessingConfig } from './types';
 import { apiService, JobStatus } from './services/apiService';
 import { useNetworkStatus, useOperationQueue } from './services/networkResilience';
 
-// Components
 import { SwissHeader } from './components/SwissHeader';
 import { SwissSidebar } from './components/SwissSidebar';
 import { PipelineDisplay } from './components/PipelineDisplay';
@@ -19,17 +23,16 @@ const PIPELINE_STEPS = [
   { id: PipelineStep.UPLOAD, label: '01', name: 'UPLOAD' },
   { id: PipelineStep.INGEST, label: '02', name: 'INGEST' },
   { id: PipelineStep.ANALYSIS, label: '03', name: 'SPECTRUM' },
-  { id: PipelineStep.DENOISE, label: '04', name: 'DENOISE' },
-  { id: PipelineStep.UPSCALE, label: '05', name: 'UPSCALE' },
-  { id: PipelineStep.COMPLETE, label: '06', name: 'EXPORT' },
+  { id: PipelineStep.DENSE, label: '04', name: 'DENSE' },
+  { id: PipelineStep.DENOISE, label: '05', name: 'DENOISE' },
+  { id: PipelineStep.UPSCALE, label: '06', name: 'UPSCALE' },
+  { id: PipelineStep.EXPORT, label: '07', name: 'EXPORT' },
 ];
 
 const App: React.FC = () => {
-  // Network Resilience
   const networkStatus = useNetworkStatus('http://localhost:5001/api/health', 5000);
   const { queueLength } = useOperationQueue();
-  
-  // State
+
   const [step, setStep] = useState<PipelineStep>(PipelineStep.IDLE);
   const [metadata, setMetadata] = useState<AudioMetadata | null>(null);
   const [progress, setProgress] = useState(0);
@@ -37,11 +40,11 @@ const App: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [stagedFile, setStagedFile] = useState<File | null>(null);
-  const [logs, setLogs] = useState<string[]>(['SYS.INIT', 'TRINITY.READY']);
-  
-  // Config
+  const [logs, setLogs] = useState<string[]>(['SYS.INIT', 'TRINITY.V7.READY']);
+
   const [config, setConfig] = useState<ProcessingConfig>({
-    denoiseStrength: 75,
+    mode: 'standard',
+    denoiseStrength: 85,
     highPrecision: true,
     upscaleFactor: 2,
     targetSampleRate: 48000,
@@ -49,23 +52,19 @@ const App: React.FC = () => {
     noiseProfile: 'auto',
   });
 
-  // Audio
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Helpers
   const addLog = useCallback((msg: string) => {
     setLogs(prev => [...prev.slice(-6), msg]);
   }, []);
 
-  // Sync backend status with network status
-  const backendStatus = networkStatus.isBackendReachable ? 'online' : 
+  const backendStatus = networkStatus.isBackendReachable ? 'online' :
                         networkStatus.isOnline ? 'checking' : 'offline';
 
-  // Effects - Log network changes
   useEffect(() => {
     if (networkStatus.isBackendReachable) {
       addLog('BACKEND.OK');
@@ -90,17 +89,15 @@ const App: React.FC = () => {
     };
   }, [audioUrl]);
 
-  // Handlers
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
   const handleDragLeave = () => setIsDragging(false);
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file?.type.startsWith('audio/')) stageFile(file);
+    if (file) stageFile(file);
   };
 
-  // Stage file for review before processing
   const stageFile = (file: File) => {
     setStagedFile(file);
     setStep(PipelineStep.STAGED);
@@ -109,45 +106,46 @@ const App: React.FC = () => {
     addLog(`STAGED: ${file.name.slice(0, 16).toUpperCase()}`);
   };
 
-  // Start processing after user confirms
   const startProcessing = async () => {
     if (!stagedFile) return;
     if (backendStatus !== 'online') {
       setError('BACKEND OFFLINE');
       return;
     }
-    
+
     const file = stagedFile;
     setError(null);
     setStep(PipelineStep.UPLOAD);
     setProgress(0);
     setDownloadUrl(null);
-    addLog('PROCESSING.START');
+    addLog(`MODE: ${config.mode.toUpperCase()}`);
 
     try {
       const upload = await apiService.uploadFile(file, setProgress);
       if (!upload.success) throw new Error(upload.error);
       addLog('UPLOAD.OK');
-      
+
       setStep(PipelineStep.INGEST);
       setProgress(0);
-      
+
       const proc = await apiService.startProcessing(upload.file_id, config);
       if (!proc.success) throw new Error(proc.error);
       addLog(`JOB: ${proc.job_id.slice(0, 8)}`);
-      
+
       await apiService.pollJobStatus(proc.job_id, (status: JobStatus) => {
         setProgress(status.progress);
         const stageMap: Record<string, PipelineStep> = {
           upload: PipelineStep.UPLOAD,
           ingest: PipelineStep.INGEST,
           analysis: PipelineStep.ANALYSIS,
+          dense: PipelineStep.DENSE,
           denoise: PipelineStep.DENOISE,
           upscale: PipelineStep.UPSCALE,
-          export: PipelineStep.COMPLETE,
+          export: PipelineStep.EXPORT,
         };
         if (stageMap[status.current_stage]) setStep(stageMap[status.current_stage]);
         if (status.status === 'complete') {
+          setStep(PipelineStep.COMPLETE);
           setDownloadUrl(apiService.getDownloadUrl(status.job_id));
           addLog('COMPLETE');
         }
@@ -181,29 +179,28 @@ const App: React.FC = () => {
     addLog('RESET');
   };
 
-  const isProcessing = step !== PipelineStep.IDLE && step !== PipelineStep.COMPLETE;
+  const isProcessing = step !== PipelineStep.IDLE && step !== PipelineStep.STAGED && step !== PipelineStep.COMPLETE;
   const isComplete = step === PipelineStep.COMPLETE;
   const stepIndex = PIPELINE_STEPS.findIndex(s => s.id === step);
 
   return (
     <div className="swiss-app">
       {audioUrl && <audio ref={audioRef} src={audioUrl} />}
-      
-      {/* Offline Banner - Shows when network/backend is unavailable */}
-      <OfflineBanner 
+
+      <OfflineBanner
         isOnline={networkStatus.isOnline}
         isBackendReachable={networkStatus.isBackendReachable}
         reconnectAttempts={networkStatus.reconnectAttempts}
         onRetry={networkStatus.forceReconnect}
         queueLength={queueLength}
       />
-      
+
       <div className="swiss-grid">
         <SwissHeader status={backendStatus} />
-        
-        <SwissSidebar 
-          config={config} 
-          setConfig={setConfig} 
+
+        <SwissSidebar
+          config={config}
+          setConfig={setConfig}
           logs={logs}
           isDisabled={isProcessing}
         />
@@ -214,7 +211,7 @@ const App: React.FC = () => {
           <PipelineDisplay currentStep={step} steps={PIPELINE_STEPS} />
 
           {step === PipelineStep.IDLE && (
-            <FileDropZone 
+            <FileDropZone
               onFileSelect={stageFile}
               isDragging={isDragging}
               onDragOver={handleDragOver}
@@ -233,7 +230,7 @@ const App: React.FC = () => {
           )}
 
           {isProcessing && (
-            <ProcessingStatus 
+            <ProcessingStatus
               step={step}
               stepName={PIPELINE_STEPS[stepIndex]?.name || 'PROCESSING'}
               progress={progress}
@@ -241,20 +238,20 @@ const App: React.FC = () => {
           )}
 
           {isComplete && (
-            <CompletionPanel 
-              config={config} 
-              downloadUrl={downloadUrl} 
+            <CompletionPanel
+              config={config}
+              downloadUrl={downloadUrl}
               onReset={reset}
             />
           )}
 
-          {audioUrl && !isComplete && (
-            <SwissPlayer 
-              isPlaying={isPlaying} 
-              togglePlay={togglePlay} 
-              metadata={metadata} 
-              currentTime={currentTime} 
-              duration={duration} 
+          {audioUrl && !isComplete && step === PipelineStep.STAGED && (
+            <SwissPlayer
+              isPlaying={isPlaying}
+              togglePlay={togglePlay}
+              metadata={metadata}
+              currentTime={currentTime}
+              duration={duration}
             />
           )}
         </main>
@@ -270,46 +267,27 @@ const App: React.FC = () => {
         }
         .swiss-grid {
           display: grid;
-          grid-template-columns: 280px 1fr;
+          grid-template-columns: 260px 1fr;
           grid-template-rows: auto 1fr auto;
           min-height: 100vh;
-          border: 4px solid #000;
-          transition: all 0.3s ease;
+          border: 3px solid #000;
         }
-
-        /* Mobile Responsive Breakpoint */
         @media (max-width: 768px) {
           .swiss-grid {
             grid-template-columns: 1fr;
             grid-template-rows: auto auto 1fr auto;
             border-width: 0;
           }
-          
-          .swiss-app {
-            overflow-x: hidden;
-          }
-          
-          .drop-zone, .processing-zone, .complete-zone {
-            margin: 12px;
-            padding: 24px;
-          }
-          
-          .swiss-footer {
-            flex-direction: column;
-            gap: 12px;
-            text-align: center;
-          }
+          .swiss-app { overflow-x: hidden; }
         }
-
         .swiss-main {
-          display: flex; flex-direction: column; background: #f5f5f5;
-          position: relative;
-          z-index: 1;
+          display: flex; flex-direction: column; background: #f7f7f7;
+          position: relative; z-index: 1;
         }
         .error-banner {
-          background: #ff3300; color: #fff; padding: 12px 24px;
+          background: #ff3300; color: #fff; padding: 10px 24px;
           font-weight: 700; text-align: center;
-          text-transform: uppercase; letter-spacing: 2px;
+          text-transform: uppercase; letter-spacing: 2px; font-size: 12px;
         }
       `}</style>
     </div>
