@@ -32,6 +32,9 @@ ALLOWED_ORIGINS = os.getenv('VOXIS_ALLOWED_ORIGINS', 'http://localhost:5173,http
 # Device
 DEVICE = os.getenv('VOXIS_DEVICE', 'cpu')
 
+# Model storage directory (downloads go here on first launch)
+MODEL_DIR = os.getenv('VOXIS_MODEL_DIR', '')  # Empty = auto-detect per platform
+
 # Model Names (VOXIS Dense Engine)
 MODEL_NAMES = {
     'analysis': 'Dense Spectrum Analyzer',

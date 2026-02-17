@@ -5,7 +5,7 @@
   <title>VOXIS</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    
+
     body {
       font-family: 'Helvetica Neue', Arial, sans-serif;
       background: #000;
@@ -16,29 +16,38 @@
       height: 100vh;
       -webkit-app-region: drag;
     }
-    
+
     .splash-container {
       text-align: center;
     }
-    
+
     .logo {
       font-size: 48px;
       font-weight: 900;
       letter-spacing: 8px;
       margin-bottom: 24px;
     }
-    
+
     .logo span {
       color: #ff3300;
     }
-    
+
     .status {
       font-size: 11px;
       letter-spacing: 3px;
       color: #666;
-      margin-bottom: 32px;
+      margin-bottom: 12px;
+      transition: color 0.3s;
     }
-    
+
+    .sub-status {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: #444;
+      margin-bottom: 24px;
+      min-height: 14px;
+    }
+
     .loader {
       width: 80px;
       height: 4px;
@@ -47,7 +56,7 @@
       position: relative;
       overflow: hidden;
     }
-    
+
     .loader::after {
       content: '';
       position: absolute;
@@ -57,12 +66,12 @@
       background: #ff3300;
       animation: slide 1s infinite;
     }
-    
+
     @keyframes slide {
       0% { left: -40px; }
       100% { left: 80px; }
     }
-    
+
     .powered-by {
       position: absolute;
       bottom: 24px;
@@ -75,9 +84,27 @@
 <body>
   <div class="splash-container">
     <div class="logo">VOXIS<span>.</span></div>
-    <div class="status">INITIALIZING TRINITY ENGINE</div>
-    <div class="loader"></div>
+    <div class="status" id="status">INITIALIZING TRINITY ENGINE</div>
+    <div class="sub-status" id="sub-status"></div>
+    <div class="loader" id="loader"></div>
   </div>
   <div class="powered-by">POWERED BY TRINITY — BUILT BY GLASS STONE</div>
+  <script>
+    try {
+      const { ipcRenderer } = require('electron');
+      if (ipcRenderer) {
+        ipcRenderer.on('splash-status', (_, msg) => {
+          document.getElementById('status').textContent = msg;
+        });
+        ipcRenderer.on('splash-sub-status', (_, msg) => {
+          document.getElementById('sub-status').textContent = msg;
+        });
+        ipcRenderer.on('splash-progress', (_, pct) => {
+          const loader = document.getElementById('loader');
+          loader.style.background = 'linear-gradient(to right, #ff3300 ' + pct + '%, #333 ' + pct + '%)';
+        });
+      }
+    } catch (e) {}
+  </script>
 </body>
 </html>

@@ -36,6 +36,17 @@ except ImportError as e:
     logger.warning(f"Pipeline import failed: {e}")
     PIPELINE_AVAILABLE = False
 
+try:
+    from model_manager import (
+        get_model_status, get_single_model_status,
+        start_background_download, cancel_download,
+        is_downloading, check_and_init_models
+    )
+    MODEL_MANAGER_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Model manager import failed: {e}")
+    MODEL_MANAGER_AVAILABLE = False
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.environ.get('VOXIS_UPLOAD_DIR', os.path.join(BASE_DIR, 'uploads'))
 OUTPUT_DIR = os.environ.get('VOXIS_OUTPUT_DIR', os.path.join(BASE_DIR, 'outputs'))
@@ -142,13 +153,31 @@ def _after(r):
 @app.errorhandler(413)
 def _413(e): return jsonify({'error': 'File too large'}), 413
 
+@app.errorhandler(500)
+def _500(e):
+    logger.exception(f"Internal server error: {e}")
+    return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+
+@app.errorhandler(Exception)
+def _unhandled(e):
+    logger.exception(f"Unhandled exception: {e}")
+    return jsonify({'error': f'Server error: {str(e)}'}), 500
+
 # === ROUTES ===
 
 @app.route('/api/health')
 def health():
-    return jsonify({'status': 'healthy', 'service': 'VOXIS 3.2 Dense',
-                    'powered_by': 'Trinity v7', 'built_by': 'Glass Stone',
-                    'pipeline': PIPELINE_AVAILABLE, 'timestamp': datetime.utcnow().isoformat()})
+    resp = {'status': 'healthy', 'service': 'VOXIS 3.2 Dense',
+            'powered_by': 'Trinity v7', 'built_by': 'Glass Stone',
+            'pipeline': PIPELINE_AVAILABLE, 'timestamp': datetime.utcnow().isoformat()}
+    if MODEL_MANAGER_AVAILABLE:
+        try:
+            ms = get_model_status()
+            resp['models_ready'] = ms.get('all_ready', False)
+            resp['models_downloading'] = ms.get('any_downloading', False)
+        except:
+            pass
+    return jsonify(resp)
 
 @app.route('/api/stats')
 def get_stats():
@@ -172,39 +201,43 @@ def upload():
 @app.route('/api/process', methods=['POST'])
 @rate_limit
 def process():
-    if not request.is_json: return jsonify({'error': 'JSON required'}), 400
-    d = request.get_json()
-    if not d or 'file_id' not in d: return jsonify({'error': 'file_id required'}), 400
-    fid = d['file_id']
-    try: uuid.UUID(fid)
-    except: return jsonify({'error': 'Bad file_id'}), 400
+    try:
+        if not request.is_json: return jsonify({'error': 'JSON required'}), 400
+        d = request.get_json()
+        if not d or 'file_id' not in d: return jsonify({'error': 'file_id required'}), 400
+        fid = d['file_id']
+        try: uuid.UUID(fid)
+        except: return jsonify({'error': 'Bad file_id'}), 400
 
-    inp = None
-    for ext in ALL_EXT:
-        p = os.path.join(UPLOAD_DIR, f"{fid}.{ext}")
-        if os.path.exists(p): inp = p; break
-    if not inp: return jsonify({'error': 'File not found'}), 404
+        inp = None
+        for ext in ALL_EXT:
+            p = os.path.join(UPLOAD_DIR, f"{fid}.{ext}")
+            if os.path.exists(p): inp = p; break
+        if not inp: return jsonify({'error': 'File not found'}), 404
 
-    cfg = {
-        'mode': d.get('mode', 'standard'),
-        'denoise_strength': min(1.0, max(0.0, float(d.get('denoise_strength', 85)) / 100.0)),
-        'high_precision': bool(d.get('high_precision', True)),
-        'upscale_factor': min(4, max(1, int(d.get('upscale_factor', 2)))),
-        'target_sample_rate': int(d.get('target_sample_rate', 48000)),
-        'target_channels': min(2, max(1, int(d.get('target_channels', 2))))
-    }
-    if cfg['target_sample_rate'] not in [44100, 48000, 96000]: cfg['target_sample_rate'] = 48000
+        cfg = {
+            'mode': d.get('mode', 'standard'),
+            'denoise_strength': min(1.0, max(0.0, float(d.get('denoise_strength', 85)) / 100.0)),
+            'high_precision': bool(d.get('high_precision', True)),
+            'upscale_factor': min(4, max(1, int(d.get('upscale_factor', 2)))),
+            'target_sample_rate': int(d.get('target_sample_rate', 48000)),
+            'target_channels': min(2, max(1, int(d.get('target_channels', 2))))
+        }
+        if cfg['target_sample_rate'] not in [44100, 48000, 96000]: cfg['target_sample_rate'] = 48000
 
-    jid = str(uuid.uuid4())
-    out = os.path.join(OUTPUT_DIR, f"voxis_dense_{jid}.wav")
-    with jobs_lock:
-        jobs[jid] = {'job_id': jid, 'file_id': fid, 'status': 'queued', 'current_stage': 'upload',
-                     'progress': 0, 'config': cfg, 'input_file': inp, 'output_file': None,
-                     'results': None, 'error': None, 'created_at': datetime.utcnow().isoformat(),
-                     'started_at': None, 'completed_at': None, 'updated_at': datetime.utcnow().isoformat()}
-        stats['jobs'] += 1
-    threading.Thread(target=run_job, args=(jid, inp, out, cfg), daemon=True).start()
-    return jsonify({'success': True, 'job_id': jid, 'status': 'queued'})
+        jid = str(uuid.uuid4())
+        out = os.path.join(OUTPUT_DIR, f"voxis_dense_{jid}.wav")
+        with jobs_lock:
+            jobs[jid] = {'job_id': jid, 'file_id': fid, 'status': 'queued', 'current_stage': 'upload',
+                         'progress': 0, 'config': cfg, 'input_file': inp, 'output_file': None,
+                         'results': None, 'error': None, 'created_at': datetime.utcnow().isoformat(),
+                         'started_at': None, 'completed_at': None, 'updated_at': datetime.utcnow().isoformat()}
+            stats['jobs'] += 1
+        threading.Thread(target=run_job, args=(jid, inp, out, cfg), daemon=True).start()
+        return jsonify({'success': True, 'job_id': jid, 'status': 'queued'})
+    except Exception as e:
+        logger.exception(f"Process endpoint error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/status/<jid>')
 def status(jid):
@@ -270,6 +303,46 @@ def delete_job(jid):
         del jobs[jid]
     return jsonify({'success': True})
 
+# === MODEL MANAGEMENT ROUTES ===
+
+@app.route('/api/models')
+def models_status():
+    """Get status of all AI models (downloaded, downloading, missing)."""
+    if not MODEL_MANAGER_AVAILABLE:
+        return jsonify({'error': 'Model manager not available'}), 503
+    return jsonify(get_model_status())
+
+@app.route('/api/models/<model_id>')
+def model_status(model_id):
+    """Get status of a specific model."""
+    if not MODEL_MANAGER_AVAILABLE:
+        return jsonify({'error': 'Model manager not available'}), 503
+    status = get_single_model_status(model_id)
+    if not status:
+        return jsonify({'error': 'Unknown model'}), 404
+    return jsonify(status)
+
+@app.route('/api/models/download', methods=['POST'])
+@rate_limit
+def models_download():
+    """Start downloading models. Optional: specify model_id for single model."""
+    if not MODEL_MANAGER_AVAILABLE:
+        return jsonify({'error': 'Model manager not available'}), 503
+    d = request.get_json() or {}
+    model_id = d.get('model_id')  # None = download all
+    if is_downloading():
+        return jsonify({'error': 'Download already in progress', 'downloading': True}), 409
+    started = start_background_download(model_id=model_id)
+    return jsonify({'success': started, 'downloading': started})
+
+@app.route('/api/models/cancel', methods=['POST'])
+def models_cancel():
+    """Cancel ongoing model download."""
+    if not MODEL_MANAGER_AVAILABLE:
+        return jsonify({'error': 'Model manager not available'}), 503
+    cancel_download()
+    return jsonify({'success': True})
+
 def _shutdown(sig, frame):
     logger.info("Shutdown"); cleanup(); sys.exit(0)
 signal.signal(signal.SIGINT, _shutdown)
@@ -282,5 +355,11 @@ if __name__ == '__main__':
     print("  (c) 2026 Glass Stone")
     print("="*48)
     print(f"  Port: {PORT} | Pipeline: {'OK' if PIPELINE_AVAILABLE else 'N/A'}")
+    print(f"  Models: {'OK' if MODEL_MANAGER_AVAILABLE else 'N/A'}")
     print("="*48 + "\n")
+
+    # Check and auto-download missing models on startup
+    if MODEL_MANAGER_AVAILABLE:
+        check_and_init_models()
+
     app.run(host=HOST, port=PORT, debug=False, threaded=True)

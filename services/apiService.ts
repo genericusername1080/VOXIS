@@ -113,6 +113,27 @@ export interface HealthResponse {
   powered_by: string;
   built_by: string;
   timestamp: string;
+  models_ready?: boolean;
+  models_downloading?: boolean;
+}
+
+export interface ModelInfo {
+  name: string;
+  engine: string;
+  description: string;
+  status: 'not_downloaded' | 'downloading' | 'ready' | 'error';
+  progress: number;
+  error: string | null;
+  size_mb: number;
+}
+
+export interface ModelsStatus {
+  models: Record<string, ModelInfo>;
+  all_ready: boolean;
+  any_downloading: boolean;
+  total_size_mb: number;
+  model_dir: string;
+  online: boolean;
 }
 
 // =============================================================================
@@ -264,6 +285,66 @@ class ApiService {
       const res = await fetchWithTimeout(this.getDownloadUrl(jobId), {}, 60000);
       if (!res.ok) throw new Error('Download failed');
       return res.blob();
+    });
+  }
+
+  // === MODEL MANAGEMENT ===
+
+  // Get all model statuses
+  async getModelsStatus(): Promise<ModelsStatus> {
+    const res = await fetchWithTimeout(`${this.baseUrl}/api/models`, {}, 5000);
+    if (!res.ok) throw new Error('Failed to get model status');
+    return res.json();
+  }
+
+  // Start downloading models (all or single)
+  async downloadModels(modelId?: string): Promise<{ success: boolean; downloading: boolean }> {
+    const res = await fetchWithTimeout(`${this.baseUrl}/api/models/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(modelId ? { model_id: modelId } : {}),
+    }, 10000);
+    return res.json();
+  }
+
+  // Cancel model download
+  async cancelModelDownload(): Promise<{ success: boolean }> {
+    const res = await fetchWithTimeout(`${this.baseUrl}/api/models/cancel`, {
+      method: 'POST',
+    }, 5000);
+    return res.json();
+  }
+
+  // Poll model download status
+  async pollModelsStatus(
+    onUpdate: (status: ModelsStatus) => void,
+    intervalMs: number = 1000
+  ): Promise<ModelsStatus> {
+    return new Promise((resolve, reject) => {
+      let errors = 0;
+      const poll = async () => {
+        try {
+          const status = await this.getModelsStatus();
+          errors = 0;
+          onUpdate(status);
+          if (status.all_ready) {
+            resolve(status);
+          } else if (status.any_downloading) {
+            setTimeout(poll, intervalMs);
+          } else {
+            // Not all ready but nothing downloading — some failed
+            resolve(status);
+          }
+        } catch (err) {
+          errors++;
+          if (errors >= 5) {
+            reject(new Error('Lost connection during model download'));
+          } else {
+            setTimeout(poll, intervalMs * 2);
+          }
+        }
+      };
+      poll();
     });
   }
 }

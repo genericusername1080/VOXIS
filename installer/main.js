@@ -181,6 +181,33 @@ ipcMain.handle('get-app-info', () => ({
   isDev
 }));
 
+// Model management IPC
+ipcMain.handle('get-model-status', async () => {
+  try {
+    const res = await fetch(`http://localhost:${BACKEND_PORT}/api/models`);
+    return await res.json();
+  } catch { return { error: 'Backend unreachable' }; }
+});
+
+ipcMain.handle('download-models', async (_, modelId) => {
+  try {
+    const body = modelId ? JSON.stringify({ model_id: modelId }) : '{}';
+    const res = await fetch(`http://localhost:${BACKEND_PORT}/api/models/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+    return await res.json();
+  } catch { return { error: 'Backend unreachable' }; }
+});
+
+ipcMain.handle('cancel-model-download', async () => {
+  try {
+    const res = await fetch(`http://localhost:${BACKEND_PORT}/api/models/cancel`, { method: 'POST' });
+    return await res.json();
+  } catch { return { error: 'Backend unreachable' }; }
+});
+
 // =============================================================================
 // LIFECYCLE
 // =============================================================================
