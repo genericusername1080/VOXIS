@@ -1,6 +1,6 @@
 /**
- * VOXIS 3.2 Dense
- * Powered by Trinity v7 | Built by Glass Stone
+ * VOXIS 4 Dense
+ * Powered by Trinity 8.1 | Built by Glass Stone
  * Copyright (c) 2026 Glass Stone. All rights reserved.
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -40,7 +40,7 @@ const App: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [stagedFile, setStagedFile] = useState<File | null>(null);
-  const [logs, setLogs] = useState<string[]>(['SYS.INIT', 'TRINITY.V7.READY']);
+  const [logs, setLogs] = useState<string[]>(['SYS.INIT', 'TRINITY.8.1.READY']);
 
   const [config, setConfig] = useState<ProcessingConfig>({
     mode: 'standard',

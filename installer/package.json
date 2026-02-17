@@ -1,8 +1,8 @@
 {
   "name": "voxis-dense-installer",
   "productName": "VOXIS Dense",
-  "version": "3.2.0",
-  "description": "VOXIS 3.2 Dense — Audio Restoration Desktop App",
+  "version": "4.0.0",
+  "description": "VOXIS 4 Dense — Audio Restoration Desktop App",
   "homepage": "https://github.com/genericusername1080/VOXIS",
   "author": {
     "name": "Gabriel Rodriguez",

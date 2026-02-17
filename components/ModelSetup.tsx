@@ -1,7 +1,7 @@
 /**
- * VOXIS 3.2 Dense — Model Setup Component
+ * VOXIS 4 Dense — Model Setup Component
  * Shows model download status and triggers downloads on first launch.
- * Powered by Trinity v7 | Built by Glass Stone
+ * Powered by Trinity 8.1 | Built by Glass Stone
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiService, ModelsStatus, ModelInfo } from '../services/apiService';

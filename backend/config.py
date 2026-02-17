@@ -1,6 +1,6 @@
 """
-VOXIS 3.2 Dense — Configuration
-Powered by Trinity v7 | Built by Glass Stone
+VOXIS 4 Dense — Configuration
+Powered by Trinity 8.1 | Built by Glass Stone
 """
 
 import os

@@ -1,6 +1,6 @@
 /**
- * VOXIS 3.2 Dense — API Service
- * Powered by Trinity v7 | Built by Glass Stone
+ * VOXIS 4 Dense — API Service
+ * Powered by Trinity 8.1 | Built by Glass Stone
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';

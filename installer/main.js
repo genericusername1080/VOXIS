@@ -1,6 +1,6 @@
 /**
- * VOXIS 3.2 Dense — Electron Main Process
- * Powered by Trinity v7 | Built by Glass Stone
+ * VOXIS 4 Dense — Electron Main Process
+ * Powered by Trinity 8.1 | Built by Glass Stone
  */
 
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
@@ -175,7 +175,7 @@ ipcMain.handle('restart-backend', async () => {
 });
 
 ipcMain.handle('get-app-info', () => ({
-  name: 'VOXIS 3.2 Dense',
+  name: 'VOXIS 4 Dense',
   version: app.getVersion(),
   platform: process.platform,
   isDev

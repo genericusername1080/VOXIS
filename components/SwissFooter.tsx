@@ -14,7 +14,7 @@ export const SwissFooter: React.FC<SwissFooterProps> = ({ logs }) => {
         ))}
       </div>
       <div className="footer-brand">
-        VOXIS 3.2 Dense &copy; {year} Glass Stone
+        VOXIS 4 Dense &copy; {year} Glass Stone
       </div>
 
       <style>{`

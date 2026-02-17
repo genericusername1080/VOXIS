@@ -1,6 +1,6 @@
 """
-VOXIS 3.2 Dense Backend Server
-Powered by Trinity v7 | Built by Glass Stone
+VOXIS 4 Dense Backend Server
+Powered by Trinity 8.1 | Built by Glass Stone
 Copyright (c) 2026 Glass Stone. All rights reserved.
 """
 
@@ -87,7 +87,16 @@ jobs_lock = threading.Lock()
 stats = {'start': datetime.utcnow().isoformat(), 'uploads': 0, 'jobs': 0, 'ok': 0, 'fail': 0}
 
 def allowed_file(fn):
-    return '.' in fn and fn.rsplit('.', 1)[1].lower() in ALL_EXT
+    if not fn or '.' not in fn:
+        return False
+    ext = fn.rsplit('.', 1)[1].lower()
+    return ext in ALL_EXT
+
+def get_file_ext(filename):
+    """Get extension from filename, handling secure_filename edge cases."""
+    if not filename or '.' not in filename:
+        return None
+    return filename.rsplit('.', 1)[1].lower()
 
 def update_job(jid, stage, progress):
     with jobs_lock:
@@ -167,8 +176,8 @@ def _unhandled(e):
 
 @app.route('/api/health')
 def health():
-    resp = {'status': 'healthy', 'service': 'VOXIS 3.2 Dense',
-            'powered_by': 'Trinity v7', 'built_by': 'Glass Stone',
+    resp = {'status': 'healthy', 'service': 'VOXIS 4 Dense',
+            'powered_by': 'Trinity 8.1', 'built_by': 'Glass Stone',
             'pipeline': PIPELINE_AVAILABLE, 'timestamp': datetime.utcnow().isoformat()}
     if MODEL_MANAGER_AVAILABLE:
         try:
@@ -188,15 +197,56 @@ def get_stats():
 @app.route('/api/upload', methods=['POST'])
 @rate_limit
 def upload():
-    if 'file' not in request.files: return jsonify({'error': 'No file'}), 400
-    f = request.files['file']
-    if not f.filename or not allowed_file(f.filename): return jsonify({'error': 'Invalid file'}), 400
-    fid = str(uuid.uuid4())
-    ext = secure_filename(f.filename).rsplit('.', 1)[1].lower() if '.' in f.filename else 'wav'
-    path = os.path.join(UPLOAD_DIR, f"{fid}.{ext}")
-    f.save(path)
-    stats['uploads'] += 1
-    return jsonify({'success': True, 'file_id': fid, 'filename': secure_filename(f.filename), 'size': os.path.getsize(path)})
+    try:
+        if 'file' not in request.files: return jsonify({'error': 'No file'}), 400
+        f = request.files['file']
+        if not f.filename: return jsonify({'error': 'No filename'}), 400
+
+        # Get extension from original filename (before secure_filename mangles it)
+        orig_ext = get_file_ext(f.filename)
+
+        # Also check content type as fallback
+        content_type_map = {
+            'audio/mpeg': 'mp3', 'audio/mp3': 'mp3',
+            'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav',
+            'audio/flac': 'flac', 'audio/x-flac': 'flac',
+            'audio/ogg': 'ogg', 'audio/vorbis': 'ogg',
+            'audio/m4a': 'm4a', 'audio/x-m4a': 'm4a', 'audio/mp4': 'm4a',
+            'audio/aac': 'aac', 'audio/x-aac': 'aac',
+            'audio/aiff': 'aiff', 'audio/x-aiff': 'aiff',
+            'audio/x-ms-wma': 'wma',
+            'video/mp4': 'mp4', 'video/quicktime': 'mov',
+            'video/x-matroska': 'mkv', 'video/x-msvideo': 'avi',
+            'video/webm': 'webm',
+        }
+        ct_ext = content_type_map.get(f.content_type)
+
+        # Use original extension if valid, else content type, else reject
+        ext = None
+        if orig_ext and orig_ext in ALL_EXT:
+            ext = orig_ext
+        elif ct_ext and ct_ext in ALL_EXT:
+            ext = ct_ext
+        else:
+            logger.warning(f"Rejected upload: filename={f.filename}, content_type={f.content_type}, ext={orig_ext}")
+            return jsonify({'error': f'Unsupported file type: {orig_ext or f.content_type}'}), 400
+
+        fid = str(uuid.uuid4())
+        path = os.path.join(UPLOAD_DIR, f"{fid}.{ext}")
+        f.save(path)
+
+        # Verify file was actually saved and has content
+        if not os.path.exists(path) or os.path.getsize(path) == 0:
+            return jsonify({'error': 'Upload failed — empty file'}), 400
+
+        stats['uploads'] += 1
+        safe_name = secure_filename(f.filename) or f"upload.{ext}"
+        return jsonify({'success': True, 'file_id': fid, 'filename': safe_name,
+                        'filepath': path, 'size': os.path.getsize(path),
+                        'uploaded_at': datetime.utcnow().isoformat()})
+    except Exception as e:
+        logger.exception(f"Upload error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/process', methods=['POST'])
 @rate_limit
@@ -350,8 +400,8 @@ signal.signal(signal.SIGTERM, _shutdown)
 
 if __name__ == '__main__':
     print("\n" + "="*48)
-    print("  VOXIS 3.2 Dense Server")
-    print("  Powered by Trinity v7 | Glass Stone")
+    print("  VOXIS 4 Dense Server")
+    print("  Powered by Trinity 8.1 | Glass Stone")
     print("  (c) 2026 Glass Stone")
     print("="*48)
     print(f"  Port: {PORT} | Pipeline: {'OK' if PIPELINE_AVAILABLE else 'N/A'}")

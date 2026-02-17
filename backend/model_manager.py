@@ -1,9 +1,9 @@
 """
-VOXIS 3.2 Dense — Model Manager
+VOXIS 4 Dense — Model Manager
 Handles downloading, verifying, and managing AI model weights.
 Models are pulled on first launch when the target machine is online.
 
-Powered by Trinity v7 | Built by Glass Stone
+Powered by Trinity 8.1 | Built by Glass Stone
 Copyright (c) 2026 Glass Stone. All rights reserved.
 """
 

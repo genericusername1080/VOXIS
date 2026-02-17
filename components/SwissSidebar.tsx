@@ -20,19 +20,21 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
       <div className="sidebar-section">
         <div className="sidebar-title">PROCESSING MODE</div>
         <div className="btn-group mode-group">
-          {(['standard', 'extreme'] as const).map(m => (
+          {(['quick', 'standard', 'extreme'] as const).map(m => (
             <button
               key={m}
               className={`btn-option ${config.mode === m ? 'active' : ''} ${m === 'extreme' ? 'extreme-btn' : ''}`}
               onClick={() => setConfig({...config, mode: m})}
               disabled={isDisabled}
             >
-              {m === 'standard' ? 'STANDARD' : 'EXTREME'}
+              {m.toUpperCase()}
             </button>
           ))}
         </div>
         <div className="control-bio" style={{ marginTop: 6 }}>
-          {config.mode === 'standard'
+          {config.mode === 'quick'
+            ? 'Fast denoise + resample. Minimal processing for clean sources.'
+            : config.mode === 'standard'
             ? 'Diffusion-based pipeline with DeepFilterNet + AudioSR. Best balance of speed and quality.'
             : 'Maximum restoration with UVR5 separation, VoiceRestore, and full neural upscale.'}
         </div>
@@ -139,9 +141,9 @@ export const SwissSidebar: React.FC<SwissSidebarProps> = ({ config, setConfig, l
       </div>
 
       <div className="sidebar-footer">
-        <div>VOXIS 3.2 DENSE</div>
+        <div>VOXIS 4 DENSE</div>
         <div>Built by Glass Stone</div>
-        <div>Powered by Trinity v7</div>
+        <div>Powered by Trinity 8.1</div>
         <div className="footer-meta">{dateStr} {timeStr}</div>
         <div className="footer-meta">&copy; {year} Glass Stone. All rights reserved.</div>
       </div>

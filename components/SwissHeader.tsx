@@ -8,9 +8,12 @@ export const SwissHeader: React.FC<SwissHeaderProps> = ({ status }) => (
   <header className="swiss-header">
     <div className="header-left">
       <div className="swiss-logo">
-        VOXIS<span className="logo-accent"> DENSE</span>
+        <span className="logo-v">V</span>
+        <span className="logo-text">VOXIS</span>
+        <span className="logo-num">4</span>
+        <span className="logo-dense">DENSE</span>
       </div>
-      <div className="tagline">v3.2 — Powered by Trinity v7</div>
+      <div className="tagline">// TRINITY 8.1</div>
     </div>
 
     <div className="header-center">
@@ -47,10 +50,18 @@ export const SwissHeader: React.FC<SwissHeaderProps> = ({ status }) => (
       }
       .header-left { display: flex; flex-direction: column; }
       .swiss-logo {
-        font-size: 28px; font-weight: 900;
-        letter-spacing: -1px; line-height: 1;
+        display: flex; align-items: baseline; gap: 4px;
+        font-weight: 900; line-height: 1;
       }
-      .logo-accent { color: #ff3300; font-size: 20px; letter-spacing: 2px; }
+      .logo-v {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 28px; height: 28px; border-radius: 50%;
+        background: #8B0000; color: #fff; font-size: 16px;
+        font-weight: 900; margin-right: 6px;
+      }
+      .logo-text { font-size: 24px; letter-spacing: -1px; }
+      .logo-num { font-size: 24px; color: #8B0000; margin-left: 2px; }
+      .logo-dense { font-size: 14px; letter-spacing: 3px; color: #888; margin-left: 8px; }
       .tagline {
         font-size: 9px; letter-spacing: 1.5px;
         text-transform: uppercase; color: #555; margin-top: 3px;

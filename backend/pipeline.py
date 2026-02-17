@@ -1,6 +1,6 @@
 """
-VOXIS 3.2 Dense - Audio Processing Pipeline
-Powered by Trinity v7 | Built by Glass Stone
+VOXIS 4 Dense - Audio Processing Pipeline
+Powered by Trinity 8.1 | Built by Glass Stone
 Copyright (c) 2026 Glass Stone. All rights reserved.
 
 Pipeline: Ingest > Spectrum > Dense(UVR5) > Denoise(DeepFilterNet) > Upscale(AudioSR) > Export
@@ -42,8 +42,8 @@ except ImportError:
 
 class VoxisPipeline:
     """
-    VOXIS 3.2 Dense pipeline.
-    Modes: standard (diffusion default), extreme (full UVR5 + max restore).
+    VOXIS 4 Dense pipeline.
+    Modes: quick (fast denoise + resample), standard (diffusion default), extreme (full UVR5 + max restore).
     """
 
     def __init__(self, mode='standard', denoise_strength=0.85, high_precision=True,
@@ -115,9 +115,11 @@ class VoxisPipeline:
             results["stages"]["analysis"] = {"profiles": profiles}
             update("analysis", 100)
 
-            # DENSE (UVR5)
+            # DENSE (UVR5) — skipped in quick mode
             update("dense", 0)
-            if UVR5_AVAILABLE and self.separator:
+            if self.mode == 'quick':
+                results["stages"]["dense"] = {"method": "skipped_quick_mode"}
+            elif UVR5_AVAILABLE and self.separator:
                 try:
                     tmp_dir = tempfile.mkdtemp(prefix='voxis_')
                     separated = self.separator.separate(input_path, tmp_dir)
@@ -133,9 +135,18 @@ class VoxisPipeline:
                 results["stages"]["dense"] = {"method": "passthrough"}
             update("dense", 100)
 
-            # DENOISE (DeepFilterNet)
+            # DENOISE (DeepFilterNet / noisereduce)
             update("denoise", 0)
-            if DEEPFILTER_AVAILABLE and self.df_model:
+            if self.mode == 'quick':
+                # Quick mode: always use noisereduce (fast, no model needed)
+                channels = []
+                for ch in range(audio.shape[0]):
+                    channels.append(nr.reduce_noise(y=audio[ch], sr=sr, stationary=True,
+                                                     prop_decrease=self.denoise_strength))
+                    update("denoise", int(50 + (ch + 1) / audio.shape[0] * 50))
+                audio = np.array(channels)
+                results["stages"]["denoise"] = {"model": MODEL_NAMES['denoise'], "engine": "noisereduce_quick", "strength": self.denoise_strength}
+            elif DEEPFILTER_AVAILABLE and self.df_model:
                 if sr != 48000:
                     resampled = librosa.resample(audio, orig_sr=sr, target_sr=48000)
                     df_sr = 48000

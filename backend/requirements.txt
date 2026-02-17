@@ -1,5 +1,5 @@
-# VOXIS 3.2 Dense — Backend Requirements
-# Powered by Trinity v7 | Built by Glass Stone
+# VOXIS 4 Dense — Backend Requirements
+# Powered by Trinity 8.1 | Built by Glass Stone
 
 # Web Framework
 flask>=3.0.0

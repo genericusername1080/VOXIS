@@ -1,6 +1,6 @@
 /**
- * VOXIS 3.2 Dense - Type Definitions
- * Powered by Trinity v7 | Built by Glass Stone
+ * VOXIS 4 Dense - Type Definitions
+ * Powered by Trinity 8.1 | Built by Glass Stone
  * Copyright (c) 2026 Glass Stone. All rights reserved.
  */
 
@@ -17,7 +17,7 @@ export enum PipelineStep {
   COMPLETE = 'COMPLETE'
 }
 
-export type ProcessingMode = 'standard' | 'extreme';
+export type ProcessingMode = 'quick' | 'standard' | 'extreme';
 
 export interface AudioMetadata {
   name: string;
