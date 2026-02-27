@@ -1,5 +1,6 @@
-# VOXIS Backend Requirements
-# Powered by Trinity | Built by Glass Stone 2026 -R/D V1A
+# VOXIS Backend Requirements v4.0.0 — Voice-Optimized, Always-On
+# Powered by Trinity v8.1 | Built by Glass Stone 2026
+# Copyright (c) 2026 Glass Stone. All rights reserved.
 
 # Web Framework
 flask>=3.0.0
@@ -8,24 +9,56 @@ python-dotenv>=1.0.0
 gunicorn>=21.2.0
 
 # Audio Processing Core
-numpy>=1.22,<1.24
+numpy==1.26.4
 scipy>=1.11.0
 soundfile>=0.12.1
 librosa>=0.10.0
 pydub>=0.25.1
 resampy>=0.4.2
 
-# Noise Reduction (Yazdi9/Audio-Noise-Reduction)
+# Noise Reduction (spectral gating fallback)
 noisereduce>=3.0.0
 
-# Deep Filtering (Rikorose/DeepFilterNet)
+# Deep Filtering (Trinity Polish Module — voice-optimized denoise)
 deepfilternet>=0.5.6
 
 # PyTorch (CPU by default, for GPU see setup.sh)
-torch>=2.0.0
-torchaudio>=2.0.0
+torch>=2.6.0
+torchaudio>=2.6.0
+
+# TorchCodec (optional — enhances AudioSR loading, requires FFmpeg shared libs)
+# Install with: pip install torchcodec
+# Requires matching FFmpeg version in shared library path
+torchcodec>=0.10.0; python_version >= "3.10"
+
+# Neural Reconstruction (Trinity Restoration) dependencies
+einops>=0.7.0
+x-transformers>=1.27.0
+vocos>=0.1.0
+torchdiffeq>=0.2.3
+gateloop-transformer>=0.2.4
+jaxtyping>=0.2.23
+
+# VOXIS Sharding 4.0.0 — Neural Vocal Isolation (MDX-NET)
+audio-separator[cpu]==0.30.2
+
+# Trinity Spatial Magnify (AudioSR Upsampling)
+# audiosr — install separately from GitHub
+progressbar>=2.5
+unidecode
+phonemizer
+timm
+torchlibrosa
+pandas
+ftfy
+chardet
+
+# Diff-HierVC (Diffusion Voice Restoration) dependencies
+amfm_decompy>=1.0.11
+transformers>=4.30.0
 
 # Utilities
+gdown>=5.1.0
 werkzeug>=3.0.0
 pyinstaller>=6.0.0
 pywin32>=306; sys_platform == 'win32'

@@ -1,8 +1,8 @@
 {
   "name": "voxis-installer",
   "productName": "VOXIS",
-  "version": "1.0.5",
-  "description": "VOXIS Audio Restoration Desktop Installer",
+  "version": "4.0.0",
+  "description": "VOXIS Always-On Audio Restoration - Powered by Trinity v8.1 - Built by Glass Stone",
   "homepage": "https://github.com/genericusername1080/VOXIS",
   "author": {
     "name": "Gabriel Rodriguez",
@@ -14,20 +14,27 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux",
-    "build:all": "electron-builder --mac --win --linux"
+    "build:mac": "electron-builder --mac --arm64 --x64",
+    "build:mac-arm64": "electron-builder --mac --arm64",
+    "build:mac-x64": "electron-builder --mac --x64",
+    "build:win": "electron-builder --win --x64",
+    "build:linux": "electron-builder --linux --x64",
+    "build:all": "electron-builder --mac --arm64 --x64 && electron-builder --win --x64 && electron-builder --linux --x64"
   },
   "devDependencies": {
     "electron": "^39.2.7",
     "electron-builder": "^26.4.0",
     "ffmpeg-static": "^5.3.0"
   },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
+  },
   "build": {
     "appId": "com.glassstone.voxis",
+    "compression": "normal",
     "productName": "VOXIS",
     "copyright": "Copyright © 2026 Glass Stone",
+    "afterPack": "./afterPack.js",
     "directories": {
       "output": "dist",
       "buildResources": "assets"
@@ -47,8 +54,36 @@
         ]
       },
       {
-        "from": "../backend/models",
-        "to": "backend/models",
+        "from": "../backend/models/TrinityDenoise",
+        "to": "backend/models/TrinityDenoise",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../backend/models/TrinityRestore",
+        "to": "backend/models/TrinityRestore",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../backend/models/TrinityDense",
+        "to": "backend/models/TrinityDense",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../backend/models/TrinityDiffusion",
+        "to": "backend/models/TrinityDiffusion",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../backend/bin",
+        "to": "backend/bin",
         "filter": [
           "**/*"
         ]
@@ -64,6 +99,9 @@
     "mac": {
       "category": "public.app-category.music",
       "icon": "assets/icon.png",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null,
       "target": [
         {
           "target": "dmg",
@@ -75,8 +113,7 @@
         {
           "target": "zip",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         }
       ]
@@ -108,10 +145,16 @@
       ]
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "installerLanguages": [
+        "en_US"
+      ],
+      "license": "../TERMS_OF_USE.md"
     },
     "dmg": {
       "background": "assets/dmg-background.png",
@@ -133,6 +176,12 @@
         }
       ],
       "title": "${productName} v${version}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "genericusername1080",
+      "repo": "VOXIS",
+      "releaseType": "release"
     }
   }
 }

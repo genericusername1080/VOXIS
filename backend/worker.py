@@ -4,95 +4,127 @@ import os
 import time
 import multiprocessing
 import queue  # For exception handling
+import threading
 from datetime import datetime
 
-# Helper for logging configuration in worker
+# ─── PERSISTENT PIPELINE CACHE ────────────────────────────────────────────────
+# The pipeline takes 15-30s to load all models (DeepFilterNet, VoiceRestore,
+# Diff-HierVC, AudioSR, PhaseLimiter). Re-loading on every job is wasteful.
+# This module-level cache keeps the pipeline alive between jobs so only the
+# first job pays the startup cost. Subsequent jobs start processing immediately.
+# ──────────────────────────────────────────────────────────────────────────────
+
+_pipeline_cache = None
+_pipeline_cache_lock = threading.Lock()
+_pipeline_config_hash = None
+
+
+def _config_hash(config: dict) -> str:
+    """Create a hashable key from pipeline config. Only re-create pipeline if config changes."""
+    # These are the only params that affect pipeline construction
+    keys = sorted(config.keys())
+    return "|".join(f"{k}={config[k]}" for k in keys)
+
+
+def _get_or_create_pipeline(job_config: dict, logger):
+    """Return cached pipeline or create a new one. Thread-safe."""
+    global _pipeline_cache, _pipeline_config_hash
+
+    with _pipeline_cache_lock:
+        new_hash = _config_hash(job_config)
+
+        if _pipeline_cache is not None and _pipeline_config_hash == new_hash:
+            logger.info("PIPELINE CACHE HIT — reusing loaded models (0s load time)")
+            return _pipeline_cache
+
+        # Cache miss — need to create/recreate
+        if _pipeline_cache is not None:
+            logger.info("PIPELINE CACHE MISS — config changed, rebuilding")
+            # Help GC collect the old pipeline's models
+            del _pipeline_cache
+            _pipeline_cache = None
+            import gc
+            gc.collect()
+        else:
+            logger.info("PIPELINE CACHE MISS — first load, initializing models")
+
+        try:
+            from backend.pipeline import create_pipeline
+        except ImportError:
+            from pipeline import create_pipeline
+        pipeline = create_pipeline(job_config)
+        _pipeline_cache = pipeline
+        _pipeline_config_hash = new_hash
+        return pipeline
+
+
 # Helper for logging configuration in worker
 def setup_worker_logging(job_id):
-    # THREADING MODE: Do not mess with root logger handlers!
-    # root = logging.getLogger()
-    # if root.handlers:
-    #     for handler in root.handlers:
-    #         root.removeHandler(handler)
-            
-    # log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'server.log')
-    # logging.basicConfig(
-    #     level=logging.INFO, 
-    #     format='%(asctime)s | %(levelname)-8s | WORKER | %(message)s',
-    #     datefmt='%Y-%m-%d %H:%M:%S',
-    #     handlers=[
-    #         logging.FileHandler(log_path),
-    #         logging.StreamHandler(sys.stdout)
-    #     ]
-    # )
+    # Use a separate logger for the worker to avoid conflict with main process
     return logging.getLogger(f"worker-{job_id[:8]}")
 
-def worker_process_entrypoint(job_id: str, input_path: str, output_path: str, job_config: dict, queue_obj: multiprocessing.Queue):
-    """
-    Isolated worker process function.
-    Runs in a separate process to prevent SIGSEGV from killing the main server.
 
-    PERFORMANCE: All heavy imports (torch, pipeline, etc.) happen HERE,
-    not in the main server process. This keeps the server responsive.
+def worker_process_entrypoint(job_id: str, input_path: str, output_path: str, job_config: dict, queue_obj):
     """
-    # RAW DEBUG to stderr to ensure we see it in terminal
-    sys.stderr.write(f"DEBUG: Worker process started. PID: {os.getpid()}\n")
-    sys.stderr.flush()
+    Isolated worker function.
+    Runs in a separate thread to prevent SIGSEGV from killing the main server.
 
+    PERFORMANCE: Uses persistent pipeline cache — only the first job loads models.
+    Subsequent jobs reuse the cached pipeline and start processing immediately.
+    """
     logger = setup_worker_logging(job_id)
-    logger.info(f"Worker logging initialized. PID: {os.getpid()}")
+    logger.info(f"Worker started for job {job_id}. PID: {os.getpid()}")
 
     try:
         t0 = time.time()
-        logger.info(f"Worker started for job {job_id}")
-        sys.stderr.write("DEBUG: Logger initialized, starting imports...\n")
-        sys.stderr.flush()
-        
+
         # We use queue_obj passed from server
         queue_obj.put(('status', job_id, 'processing'))
         queue_obj.put(('started', job_id, datetime.utcnow().isoformat()))
 
-        # DEBUG: Check environment
-        logger.info(f"Worker sys.path: {sys.path}")
-        import numpy
-        logger.info(f"Worker loaded numpy from: {numpy.__file__} | Version: {numpy.__version__}")
-        import torch
-        logger.info(f"Worker loaded torch from: {torch.__file__} | Version: {torch.__version__}")
-        import torchvision
-        logger.info(f"Worker loaded torchvision from: {torchvision.__file__} | Version: {torchvision.__version__}")
-
-
-        # Import pipeline here (loads torch, torchaudio, etc.)
-        # Ensure currrent dir is in path for local imports
+        # Ensure root dir is in path for absolute backend.* imports
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        if current_dir not in sys.path:
-            sys.path.insert(0, current_dir)
+        root_dir = os.path.dirname(current_dir)
+        if root_dir not in sys.path:
+            sys.path.insert(0, root_dir)
 
-        import backend.patch_torchaudio as patch_torchaudio  # Must be before torchaudio
+        # Apply torchaudio patch — must be before torchaudio import
+        # Handle both dev mode (backend.utils.*) and PyInstaller frozen mode
         try:
-            from backend.pipeline import create_pipeline, PIPELINE_AVAILABLE
-        except ImportError as e:
-            logger.error(f"Pipeline import error: {e}")
-            PIPELINE_AVAILABLE = False
+            import backend.utils.patch_torchaudio as patch_torchaudio
+        except ImportError:
+            try:
+                import utils.patch_torchaudio as patch_torchaudio
+            except ImportError:
+                logger.warning("patch_torchaudio not found — DeepFilterNet may fail")
+
+        try:
+            from backend.pipeline import PIPELINE_AVAILABLE
+        except ImportError:
+            try:
+                from pipeline import PIPELINE_AVAILABLE
+            except ImportError as e:
+                logger.error(f"Pipeline import error: {e}")
+                PIPELINE_AVAILABLE = False
 
         if not PIPELINE_AVAILABLE:
             raise RuntimeError("Audio processing pipeline not available in worker")
 
         t1 = time.time()
-        logger.info(f"Pipeline imported in {t1-t0:.1f}s")
+        logger.info(f"Pipeline module imported in {t1-t0:.1f}s")
 
-        # Create pipeline
-        pipeline = create_pipeline(job_config)
+        # ── GET OR REUSE CACHED PIPELINE ──────────────────────────────────
+        pipeline = _get_or_create_pipeline(job_config, logger)
         t2 = time.time()
-        logger.info(f"Pipeline initialized in {t2-t1:.1f}s")
+        logger.info(f"Pipeline ready in {t2-t1:.1f}s (cached={t2-t1 < 1.0})")
 
         # Progress callback
-        def on_progress(stage: str, progress: int):
+        def on_progress(stage: str, progress: int, details: dict = None):
             queue_obj.put(('progress', job_id, stage, progress))
 
         # Run processing
         logger.info("Starting pipeline processing...")
-        results = pipeline.process(input_path, output_path, progress_callback=on_progress)
+        results = pipeline.process(input_path, output_path, status_callback=on_progress)
 
         t3 = time.time()
         if results.get('success'):
@@ -107,15 +139,13 @@ def worker_process_entrypoint(job_id: str, input_path: str, output_path: str, jo
         try:
             queue_obj.put(('error', job_id, str(e)))
         except Exception:
-            pass # Queue might be closed
+            pass  # Queue might be closed
     finally:
-        # PERFORMANCE: Explicit memory cleanup
+        # PERFORMANCE: Only flush GPU cache, don't destroy the pipeline
         try:
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            import gc
-            gc.collect()
         except Exception:
             pass
-        logger.info("Worker process exiting")
+        logger.info("Worker thread exiting (pipeline cached for next job)")
