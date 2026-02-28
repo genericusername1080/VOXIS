@@ -1,0 +1,288 @@
+@import "tailwindcss";
+
+/* ================================================================
+   VOXIS DENSE — Bauhaus Design System
+   Powered by Trinity v8.1 | Built by Glass Stone
+   Copyright (c) 2026 Glass Stone. All rights reserved.
+   ================================================================ */
+
+:root {
+  /* Bauhaus Palette */
+  --bg-cream: #F2F0E6;
+  --primary-red: #E31C23;
+  --primary-blue: #005696;
+  --primary-yellow: #FFC919;
+  --primary-green: #00A651;
+  --charcoal: #1A1A1A;
+  --white: #FFFFFF;
+
+  /* Additional Grayscale */
+  --grey-100: #F3F4F6;
+  --grey-200: #E5E7EB;
+  --grey-300: #D1D5DB;
+  --grey-400: #9CA3AF;
+  --grey-500: #6B7280;
+  --grey-600: #4B5563;
+  --grey-700: #374151;
+
+  /* Dynamic Spacing — scales fluidly between 320px and 1440px viewport */
+  --space-xs: clamp(2px, 0.3vw, 4px);
+  --space-sm: clamp(4px, 0.6vw, 8px);
+  --space-md: clamp(10px, 1.2vw, 16px);
+  --space-lg: clamp(14px, 1.8vw, 24px);
+  --space-xl: clamp(18px, 2.4vw, 32px);
+  --space-2xl: clamp(24px, 3.6vw, 48px);
+
+  /* Dynamic Typography */
+  --text-xs: clamp(10px, 0.7vw, 12px);
+  --text-sm: clamp(12px, 0.9vw, 14px);
+  --text-base: clamp(14px, 1.1vw, 16px);
+  --text-lg: clamp(16px, 1.4vw, 20px);
+  --text-xl: clamp(18px, 1.8vw, 24px);
+  --text-2xl: clamp(22px, 2.4vw, 32px);
+
+  /* Dynamic Sidebar */
+  --sidebar-width: clamp(240px, 22vw, 320px);
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Borders */
+  --border-thick: 3px solid var(--charcoal);
+  --border-thin: 1px solid var(--charcoal);
+}
+
+@layer base {
+
+  html,
+  body {
+    @apply h-full font-sans bg-[var(--bg-cream)] text-[var(--charcoal)] antialiased overflow-hidden;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-black uppercase tracking-tight;
+  }
+
+  /* Smooth transitions on all interactive elements */
+  button,
+  a,
+  input,
+  select {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--bg-cream);
+    border-left: 1px solid var(--charcoal);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--primary-blue);
+    border-radius: 0;
+    transition: background 0.2s;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-red);
+  }
+}
+
+/* ================================================================
+   ANIMATION KEYFRAMES
+   ================================================================ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes glowPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(227, 28, 35, 0);
+  }
+
+  50% {
+    box-shadow: 0 0 20px 4px rgba(227, 28, 35, 0.25);
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes progressStripes {
+  0% {
+    background-position: 0 0;
+  }
+
+  100% {
+    background-position: 40px 0;
+  }
+}
+
+@keyframes staggerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ================================================================
+   ANIMATION UTILITIES
+   ================================================================ */
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.animate-slide-left {
+  animation: slideInLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 30%, rgba(255, 255, 255, 0.4) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+.animate-progress-stripes {
+  background-image: linear-gradient(45deg,
+      rgba(255, 255, 255, 0.15) 25%,
+      transparent 25%,
+      transparent 50%,
+      rgba(255, 255, 255, 0.15) 50%,
+      rgba(255, 255, 255, 0.15) 75%,
+      transparent 75%);
+  background-size: 40px 40px;
+  animation: progressStripes 1s linear infinite;
+}
+
+/* Staggered children — apply to parent, children get sequential delays */
+.stagger-children>* {
+  animation: staggerFadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.stagger-children>*:nth-child(1) {
+  animation-delay: 0.05s;
+}
+
+.stagger-children>*:nth-child(2) {
+  animation-delay: 0.10s;
+}
+
+.stagger-children>*:nth-child(3) {
+  animation-delay: 0.15s;
+}
+
+.stagger-children>*:nth-child(4) {
+  animation-delay: 0.20s;
+}
+
+.stagger-children>*:nth-child(5) {
+  animation-delay: 0.25s;
+}
+
+.stagger-children>*:nth-child(6) {
+  animation-delay: 0.30s;
+}
+
+.stagger-children>*:nth-child(7) {
+  animation-delay: 0.35s;
+}
+
+.stagger-children>*:nth-child(8) {
+  animation-delay: 0.40s;
+}

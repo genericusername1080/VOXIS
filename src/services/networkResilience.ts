@@ -1,6 +1,6 @@
 /**
  * VOXIS Network Resilience Utilities
- * Powered by Trinity | Built by Glass Stone
+ * Powered by Trinity v8.1 | Built by Glass Stone
  * 
  * Provides offline detection, reconnection handling, and operation queuing.
  */
@@ -21,28 +21,28 @@ export interface NetworkStatus {
 /**
  * Hook to monitor network and backend connectivity
  */
-export function useNetworkStatus(healthCheckUrl: string, checkIntervalMs: number = 5000) {
+export function useNetworkStatus(healthCheckUrl: string = 'http://localhost:5002/api/health', checkIntervalMs: number = 5000) {
   const [status, setStatus] = useState<NetworkStatus>({
     isOnline: navigator.onLine,
     isBackendReachable: false,
     lastOnlineAt: null,
     reconnectAttempts: 0,
   });
-  
+
   const checkIntervalRef = useRef<number | null>(null);
-  
+
   const checkBackendHealth = useCallback(async () => {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000);
-      
-      const response = await fetch(healthCheckUrl, { 
+
+      const response = await fetch(healthCheckUrl, {
         signal: controller.signal,
         cache: 'no-store'
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       if (response.ok) {
         setStatus(prev => ({
           ...prev,
@@ -61,35 +61,35 @@ export function useNetworkStatus(healthCheckUrl: string, checkIntervalMs: number
     }
     return false;
   }, [healthCheckUrl]);
-  
+
   useEffect(() => {
     // Browser online/offline events
     const handleOnline = () => {
       setStatus(prev => ({ ...prev, isOnline: true }));
       checkBackendHealth(); // Immediately check backend when browser comes online
     };
-    
+
     const handleOffline = () => {
-      setStatus(prev => ({ 
-        ...prev, 
-        isOnline: false, 
-        isBackendReachable: false 
+      setStatus(prev => ({
+        ...prev,
+        isOnline: false,
+        isBackendReachable: false
       }));
     };
-    
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    
+
     // Initial check
     checkBackendHealth();
-    
+
     // Periodic health checks
     checkIntervalRef.current = window.setInterval(() => {
       if (navigator.onLine) {
         checkBackendHealth();
       }
     }, checkIntervalMs);
-    
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -98,12 +98,12 @@ export function useNetworkStatus(healthCheckUrl: string, checkIntervalMs: number
       }
     };
   }, [checkBackendHealth, checkIntervalMs]);
-  
+
   const forceReconnect = useCallback(() => {
     checkBackendHealth();
   }, [checkBackendHealth]);
-  
-  return { ...status, forceReconnect };
+
+  return { ...status, forceReconnect, backendOnline: status.isBackendReachable };
 }
 
 // =============================================================================
@@ -124,7 +124,7 @@ export interface QueuedOperation {
 export function useOperationQueue() {
   const [queue, setQueue] = useState<QueuedOperation[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   // Load queue from localStorage on mount
   useEffect(() => {
     try {
@@ -140,12 +140,12 @@ export function useOperationQueue() {
       // Ignore parse errors
     }
   }, []);
-  
+
   // Save queue to localStorage on change
   useEffect(() => {
     localStorage.setItem('voxis_operation_queue', JSON.stringify(queue));
   }, [queue]);
-  
+
   const enqueue = useCallback((operation: Omit<QueuedOperation, 'id' | 'createdAt' | 'retries'>) => {
     const newOp: QueuedOperation = {
       ...operation,
@@ -156,21 +156,21 @@ export function useOperationQueue() {
     setQueue(prev => [...prev, newOp]);
     return newOp.id;
   }, []);
-  
+
   const dequeue = useCallback((id: string) => {
     setQueue(prev => prev.filter(op => op.id !== id));
   }, []);
-  
+
   const clearQueue = useCallback(() => {
     setQueue([]);
   }, []);
-  
+
   const incrementRetry = useCallback((id: string) => {
-    setQueue(prev => prev.map(op => 
+    setQueue(prev => prev.map(op =>
       op.id === id ? { ...op, retries: op.retries + 1 } : op
     ));
   }, []);
-  
+
   return {
     queue,
     enqueue,
@@ -199,7 +199,7 @@ export function usePersistentState<T>(key: string, initialValue: T) {
       return initialValue;
     }
   });
-  
+
   useEffect(() => {
     try {
       localStorage.setItem(`voxis_${key}`, JSON.stringify(value));
@@ -207,11 +207,11 @@ export function usePersistentState<T>(key: string, initialValue: T) {
       // Storage full or unavailable
     }
   }, [key, value]);
-  
+
   const clearPersistedState = useCallback(() => {
     localStorage.removeItem(`voxis_${key}`);
     setValue(initialValue);
   }, [key, initialValue]);
-  
+
   return [value, setValue, clearPersistedState] as const;
 }

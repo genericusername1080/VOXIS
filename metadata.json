@@ -1,7 +1,0 @@
-{
-  "name": "Voxis - Powered by Trinity",
-  "description": "Advanced Swiss-designed audio restoration pipeline built by Glass Stone. Features spectrum analysis, AI denoising, and upscaling simulation.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
-}
