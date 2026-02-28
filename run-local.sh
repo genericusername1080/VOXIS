@@ -98,23 +98,22 @@ fi
 mkdir -p backend/uploads backend/outputs
 
 # ================================================================
+# BUILD FRONTEND
+# ================================================================
+echo -e "${YELLOW}Building React frontend for native serving...${NC}"
+npm run build
+
+# ================================================================
 # PROCESS MANAGEMENT
 # ================================================================
 
 start_backend() {
-    echo -e "${BLUE}[BACKEND] Starting Gunicorn on port ${BACKEND_PORT}...${NC}"
+    echo -e "${BLUE}[VOXIS] Starting Gunicorn Server on port ${BACKEND_PORT}...${NC}"
     cd backend
     gunicorn --config gunicorn.conf.py server:app &
     BACKEND_PID=$!
     cd ..
-    echo -e "${GREEN}[BACKEND] Started with PID: ${BACKEND_PID}${NC}"
-}
-
-start_frontend() {
-    echo -e "${BLUE}[FRONTEND] Starting Vite on port ${FRONTEND_PORT}...${NC}"
-    npm run dev &
-    FRONTEND_PID=$!
-    echo -e "${GREEN}[FRONTEND] Started with PID: ${FRONTEND_PID}${NC}"
+    echo -e "${GREEN}[VOXIS] Started with PID: ${BACKEND_PID}${NC}"
 }
 
 check_backend_health() {
@@ -142,7 +141,7 @@ restart_backend() {
     sleep 3
     
     if check_backend_health; then
-        echo -e "${GREEN}[WATCHDOG] Backend recovered successfully${NC}"
+        echo -e "${GREEN}[WATCHDOG] VOXIS recovered successfully${NC}"
         BACKEND_RESTARTS=0  # Reset on successful recovery
         return 0
     fi
@@ -176,13 +175,8 @@ cleanup() {
     
     # Kill processes
     if [ $BACKEND_PID -ne 0 ]; then
-        echo -e "${YELLOW}[SHUTDOWN] Stopping backend (PID: ${BACKEND_PID})...${NC}"
+        echo -e "${YELLOW}[SHUTDOWN] Stopping VOXIS (PID: ${BACKEND_PID})...${NC}"
         kill $BACKEND_PID 2>/dev/null || true
-    fi
-    
-    if [ $FRONTEND_PID -ne 0 ]; then
-        echo -e "${YELLOW}[SHUTDOWN] Stopping frontend (PID: ${FRONTEND_PID})...${NC}"
-        kill $FRONTEND_PID 2>/dev/null || true
     fi
     
     echo -e "${GREEN}[SHUTDOWN] Complete${NC}"
@@ -196,7 +190,7 @@ trap cleanup SIGINT SIGTERM
 # ================================================================
 
 echo ""
-echo -e "${GREEN}Starting servers...${NC}"
+echo -e "${GREEN}Starting Unified VOXIS Server...${NC}"
 echo ""
 
 # Start backend
@@ -205,13 +199,9 @@ sleep 3
 
 # Verify backend started
 if ! check_backend_health; then
-    echo -e "${RED}[ERROR] Backend failed to start${NC}"
+    echo -e "${RED}[ERROR] VOXIS failed to start${NC}"
     exit 1
 fi
-
-# Start frontend
-start_frontend
-sleep 3
 
 # Start watchdog in background
 watchdog &
@@ -219,18 +209,17 @@ WATCHDOG_PID=$!
 
 echo ""
 echo -e "${GREEN}================================================================${NC}"
-echo -e "${GREEN}  VOXIS is running with reliability enhancements!${NC}"
+echo -e "${GREEN}  VOXIS Unified Architecture is Running!${NC}"
 echo -e "${GREEN}================================================================${NC}"
 echo ""
-echo -e "  Frontend:  ${BLUE}http://localhost:${FRONTEND_PORT}${NC}"
-echo -e "  Backend:   ${BLUE}http://localhost:${BACKEND_PORT}${NC}"
-echo -e "  Health:    ${BLUE}http://localhost:${BACKEND_PORT}/api/health${NC}"
+echo -e "  Application:  ${BLUE}http://localhost:${BACKEND_PORT}${NC}"
+echo -e "  API Health:   ${BLUE}http://localhost:${BACKEND_PORT}/api/health${NC}"
 echo ""
 echo -e "  ${GREEN}✓ Watchdog: Auto-restart on failure${NC}"
 echo -e "  ${GREEN}✓ Health monitoring every ${HEALTH_CHECK_INTERVAL}s${NC}"
-echo -e "  ${GREEN}✓ Max restart attempts: ${MAX_RESTART_ATTEMPTS}${NC}"
+echo -e "  ${GREEN}✓ Unified Application (React served via Flask)${NC}"
 echo ""
-echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop all servers"
+echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop server"
 echo ""
 
 # Wait for any process to exit

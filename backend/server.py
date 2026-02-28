@@ -177,36 +177,44 @@ os.makedirs(config.OUTPUT_FOLDER, exist_ok=True)
 # FLASK APP INITIALIZATION
 # =============================================================================
 
-# Determine static folder for frozen/production mode
+# Determine static folder
 static_folder = None
 if getattr(sys, 'frozen', False):
+    # Running inside PyInstaller bundle
     if hasattr(sys, '_MEIPASS'):
         base_path = sys._MEIPASS
     else:
         base_path = os.path.dirname(sys.executable)
-    
-    # Bundle puts 'dist' folder next to executable or inside _internal
     static_folder = os.path.join(base_path, 'dist')
     if not os.path.exists(static_folder):
-        # Fallback for onedir mode where dist might be in _internal/dist
         static_folder = os.path.join(os.path.dirname(sys.executable), '_internal', 'dist')
+else:
+    # Running locally in /backend
+    static_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'dist'))
+
+if not os.path.exists(static_folder):
+    logger.warning(f"Static folder not found at {static_folder}. Frontend serving will be disabled.")
+    static_folder = None
 
 app = Flask(__name__, static_folder=static_folder, static_url_path='')
 app.config['UPLOAD_FOLDER'] = config.UPLOAD_FOLDER
 app.config['OUTPUT_FOLDER'] = config.OUTPUT_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
 
-# Serve React Frontend (Production Only)
+# Serve React Frontend
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    if getattr(sys, 'frozen', False) and app.static_folder:
+    if path.startswith('api/'):
+        return jsonify({'error': 'Not found'}), 404
+        
+    if app.static_folder and os.path.exists(app.static_folder):
         if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
             return send_from_directory(app.static_folder, path)
         else:
             return send_from_directory(app.static_folder, 'index.html')
     else:
-        return "VOXIS Backend Running (Dev Mode - Use Frontend Server)", 200
+        return "VOXIS Backend Running (Build Frontend to serve natively)", 200
 
 # Enable CORS
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -734,7 +742,7 @@ def upload_file():
         
     except Exception as e:
         logger.exception(f"Upload error: {e}")
-        return jsonify({'error': 'Upload failed', 'message': str(e)}), 500
+        return jsonify({'error': f"Upload failed: {str(e)}", 'message': str(e)}), 500
 
 
 @app.route('/api/upload/recording', methods=['POST'])

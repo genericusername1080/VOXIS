@@ -65,7 +65,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
         <input
           ref={fileInputRef}
           type="file"
-          accept="audio/*,video/mp4,video/quicktime"
+          accept="audio/*,video/mp4,video/quicktime,audio/mp4,audio/x-m4a"
           onChange={handleFileChange}
           style={{ display: 'none' }}
         />
